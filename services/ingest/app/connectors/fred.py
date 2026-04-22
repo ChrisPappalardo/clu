@@ -3,11 +3,10 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-import httpx
-
 from clu_core.models import CollectedSourceData, SnapshotMetric, SourceAttribution
 
 from .base import BaseConnector
+from ..http_utils import get_json
 
 
 class FREDConnector(BaseConnector):
@@ -29,7 +28,7 @@ class FREDConnector(BaseConnector):
 
         metrics: list[SnapshotMetric] = []
         for series_id in self.config.params.get("series", []):
-            response = httpx.get(
+            observations = get_json(
                 "https://api.stlouisfed.org/fred/series/observations",
                 params={
                     "series_id": series_id,
@@ -38,10 +37,7 @@ class FREDConnector(BaseConnector):
                     "sort_order": "desc",
                     "limit": 2,
                 },
-                timeout=20.0,
-            )
-            response.raise_for_status()
-            observations = response.json().get("observations", [])
+            ).get("observations", [])
             if not observations:
                 continue
             latest = observations[0]
@@ -75,4 +71,3 @@ class FREDConnector(BaseConnector):
             section=self.config.section,
             metrics=metrics,
         )
-

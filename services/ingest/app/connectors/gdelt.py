@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-import httpx
-
 from clu_core.models import CollectedSourceData, SnapshotItem, SourceAttribution
 
 from .base import BaseConnector
+from ..http_utils import get_json
 
 
 class GDELTConnector(BaseConnector):
@@ -18,13 +17,10 @@ class GDELTConnector(BaseConnector):
             "maxrecords": self.config.params.get("max_records", 10),
             "timespan": self.config.params.get("timespan", "1d"),
         }
-        response = httpx.get(
+        data = get_json(
             "https://api.gdeltproject.org/api/v2/doc/doc",
             params=params,
-            timeout=20.0,
-        )
-        response.raise_for_status()
-        data = response.json().get("articles", [])
+        ).get("articles", [])
 
         items = [
             SnapshotItem(
@@ -52,4 +48,3 @@ class GDELTConnector(BaseConnector):
             section=self.config.section,
             items=items,
         )
-

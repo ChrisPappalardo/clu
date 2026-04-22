@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-import httpx
-
 from clu_core.models import CollectedSourceData, SnapshotMetric, SourceAttribution
 
 from .base import BaseConnector
+from ..http_utils import get_json
 
 
 class OpenMeteoConnector(BaseConnector):
@@ -15,7 +14,7 @@ class OpenMeteoConnector(BaseConnector):
         self.user_location = user_location
 
     def fetch(self) -> CollectedSourceData:
-        response = httpx.get(
+        payload = get_json(
             "https://api.open-meteo.com/v1/forecast",
             params={
                 "latitude": self.user_location.latitude,
@@ -24,10 +23,7 @@ class OpenMeteoConnector(BaseConnector):
                 "timezone": "auto",
                 "forecast_days": 1,
             },
-            timeout=20.0,
         )
-        response.raise_for_status()
-        payload = response.json()
         daily = payload.get("daily", {})
 
         metrics = [
@@ -54,4 +50,3 @@ class OpenMeteoConnector(BaseConnector):
             section=self.config.section,
             metrics=metrics,
         )
-

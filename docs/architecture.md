@@ -27,7 +27,7 @@ The system has one canonical briefing schema. Every output path uses the same st
    - `latest_snapshot.json`
    - `latest_snapshot.html`
    - `snapshot_index.json`
-   - date-stamped artifact copies
+   - immutable timestamped artifact copies for each ingest run
 6. The API serves the latest stored artifacts.
 7. The React app fetches the snapshot from the API.
 

@@ -3,11 +3,10 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-import httpx
-
 from clu_core.models import CollectedSourceData, SnapshotMetric, SourceAttribution
 
 from .base import BaseConnector
+from ..http_utils import get_json
 
 
 class AlphaVantageConnector(BaseConnector):
@@ -29,13 +28,10 @@ class AlphaVantageConnector(BaseConnector):
 
         metrics: list[SnapshotMetric] = []
         for fn in self.config.params.get("functions", []):
-            response = httpx.get(
+            payload = get_json(
                 "https://www.alphavantage.co/query",
                 params={"apikey": api_key, **fn},
-                timeout=20.0,
             )
-            response.raise_for_status()
-            payload = response.json()
             for key in ("top_gainers", "top_losers", "most_actively_traded"):
                 for row in payload.get(key, [])[:3]:
                     metrics.append(
@@ -61,4 +57,3 @@ class AlphaVantageConnector(BaseConnector):
             section=self.config.section,
             metrics=metrics,
         )
-

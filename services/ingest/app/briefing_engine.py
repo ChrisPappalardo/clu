@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import re
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 
 from clu_core.models import (
     AppConfig,
@@ -87,6 +87,13 @@ def _build_previous_cluster_lookup(history: list[DailySnapshot]) -> dict[str, St
     return lookup
 
 
+def _cluster_signature(cluster_id: str) -> str:
+    parts = cluster_id.split(":", 2)
+    if len(parts) == 3:
+        return parts[2]
+    return cluster_id
+
+
 def build_sections_and_clusters(
     config: AppConfig,
     collected: list[CollectedSourceData],
@@ -135,14 +142,13 @@ def build_sections_and_clusters(
             related_previous = [
                 prev_id
                 for prev_id, prev_cluster in previous_lookup.items()
-                if prev_cluster.section == section_id and (
-                    cluster_key in prev_cluster.id or prev_cluster.id.split(":", 1)[-1] == cluster_key
-                )
+                if prev_cluster.section == section_id and _cluster_signature(prev_cluster.id) == cluster_key
             ]
             if related_previous:
                 novelty = 0.35
             significance = "high" if importance >= 1.75 else ("medium" if importance >= 1.1 else "low")
-            cluster_id = f"{generated_at.strftime('%Y%m%d')}:{section_id}:{cluster_key}"
+            cluster_run_id = generated_at.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            cluster_id = f"{cluster_run_id}:{section_id}:{cluster_key}"
             for item in cluster_items:
                 item.novelty_score = novelty
             section_clusters.append(

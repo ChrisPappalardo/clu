@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-import httpx
-
 from clu_core.models import CollectedSourceData, SnapshotItem, SourceAttribution
 
 from .base import BaseConnector
+from ..http_utils import get_json
 
 
 USGS_FEEDS = {
@@ -19,9 +18,7 @@ class USGSConnector(BaseConnector):
     def fetch(self) -> CollectedSourceData:
         feed_name = self.config.params.get("feed", "significant_day")
         feed_url = USGS_FEEDS[feed_name]
-        response = httpx.get(feed_url, timeout=20.0)
-        response.raise_for_status()
-        payload = response.json()
+        payload = get_json(feed_url)
 
         items = [
             SnapshotItem(
@@ -52,4 +49,3 @@ class USGSConnector(BaseConnector):
             section=self.config.section,
             items=items,
         )
-

@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-import httpx
-
 from clu_core.models import CollectedSourceData, SnapshotMetric, SourceAttribution
 
 from .base import BaseConnector
+from ..http_utils import get_json
 
 
 class WorldBankConnector(BaseConnector):
@@ -15,13 +14,11 @@ class WorldBankConnector(BaseConnector):
         for spec in self.config.params.get("indicators", []):
             code = spec["code"]
             countries = spec["countries"]
-            response = httpx.get(
+            payload = get_json(
                 f"https://api.worldbank.org/v2/country/{countries}/indicator/{code}",
                 params={"format": "json", "mrv": 1},
-                timeout=20.0,
+                retries=3,
             )
-            response.raise_for_status()
-            payload = response.json()
             for row in payload[1] if len(payload) > 1 else []:
                 if row.get("value") is None:
                     continue
@@ -48,4 +45,3 @@ class WorldBankConnector(BaseConnector):
             section=self.config.section,
             metrics=metrics,
         )
-

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 from openai import OpenAI
 from pydantic import BaseModel, Field
@@ -49,8 +49,9 @@ def build_snapshot_payload(
     notes: list[str],
     memory,
 ) -> DailySnapshot:
+    snapshot_id = generated_at.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return DailySnapshot(
-        snapshot_id=generated_at.strftime("%Y%m%d"),
+        snapshot_id=snapshot_id,
         snapshot_date=generated_at.date().isoformat(),
         generated_at=generated_at,
         timezone=config.user.timezone,

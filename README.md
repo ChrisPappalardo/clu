@@ -56,6 +56,7 @@ Create the `logs/` directory before enabling the job.
 ## Notes
 
 - The ingest path writes briefing artifacts under `data/output/`.
+- Each ingest run now writes an immutable timestamped snapshot artifact in addition to `latest_snapshot.*`.
 - The ingest path also writes `snapshot_index.json` so the API and UI can inspect prior briefings.
 - If `OPENAI_API_KEY` is not set, the ingest service falls back to heuristic summaries so the pipeline can still run.
 - The current scaffold uses file-based report persistence with briefing history. The shared schema is designed so a database-backed implementation can be added without changing the API or dashboard contract.

@@ -3,11 +3,10 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-import httpx
-
 from clu_core.models import CollectedSourceData, SnapshotItem, SourceAttribution
 
 from .base import BaseConnector
+from ..http_utils import get_json
 
 
 class GuardianConnector(BaseConnector):
@@ -34,13 +33,10 @@ class GuardianConnector(BaseConnector):
             "show-fields": "trailText,headline",
             "order-by": "newest",
         }
-        response = httpx.get(
+        data = get_json(
             "https://content.guardianapis.com/search",
             params=params,
-            timeout=20.0,
-        )
-        response.raise_for_status()
-        data = response.json()["response"]["results"]
+        )["response"]["results"]
 
         items = [
             SnapshotItem(
@@ -70,4 +66,3 @@ class GuardianConnector(BaseConnector):
             section=self.config.section,
             items=items,
         )
-
