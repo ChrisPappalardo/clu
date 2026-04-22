@@ -14,7 +14,10 @@ def render_snapshot_html(snapshot: DailySnapshot) -> str:
             <li style="margin-bottom:14px;">
               <div style="font-weight:700;">{escape(cluster.title)}</div>
               <div style="margin-top:4px;color:#444;">{escape(cluster.summary)}</div>
+              {f"<div style='margin-top:4px;color:#333;'><strong>What changed:</strong> {escape(cluster.what_changed)}</div>" if cluster.what_changed else ""}
+              {f"<div style='margin-top:4px;color:#333;'><strong>Why now:</strong> {escape(cluster.why_now)}</div>" if cluster.why_now else ""}
               <div style="margin-top:4px;color:#2b2b2b;"><strong>Why it matters:</strong> {escape(cluster.why_it_matters)}</div>
+              {f"<div style='margin-top:4px;color:#5c2b2b;'><strong>Risk:</strong> {escape(cluster.risk_summary)}</div>" if cluster.risk_summary else ""}
               <div style="margin-top:4px;font-size:12px;color:#666;">Importance {cluster.importance_score:.2f} | Novelty {cluster.novelty_score:.2f}</div>
             </li>
             """
@@ -45,6 +48,9 @@ def render_snapshot_html(snapshot: DailySnapshot) -> str:
               <h2 style="margin:0 0 8px 0;">{escape(section.title)}</h2>
               <p style="margin:0 0 16px 0;color:#333;">{escape(section.summary)}</p>
               {f"<p style='margin:0 0 16px 0;color:#222;'><strong>Narrative:</strong> {escape(section.narrative)}</p>" if section.narrative else ""}
+              {f"<p style='margin:0 0 16px 0;color:#222;'><strong>What changed:</strong> {escape(section.what_changed)}</p>" if section.what_changed else ""}
+              {f"<p style='margin:0 0 16px 0;color:#222;'><strong>Why now:</strong> {escape(section.why_now)}</p>" if section.why_now else ""}
+              {f"<p style='margin:0 0 16px 0;color:#5c2b2b;'><strong>Risk:</strong> {escape(section.risk_summary)}</p>" if section.risk_summary else ""}
               {"<ul style='padding-left:20px;'>" + cluster_html + "</ul>" if cluster_html else ""}
               {"<ul style='padding-left:20px;'>" + item_html + "</ul>" if item_html else ""}
               {"<ul style='padding-left:20px;'>" + metric_html + "</ul>" if metric_html else ""}
@@ -60,6 +66,7 @@ def render_snapshot_html(snapshot: DailySnapshot) -> str:
         <li style='margin-bottom:14px;'>
           <div style='font-weight:700;'>{escape(cluster.title)}</div>
           <div style='margin-top:4px;color:#444;'>{escape(cluster.summary)}</div>
+          {f"<div style='margin-top:4px;color:#333;'><strong>What changed:</strong> {escape(cluster.what_changed)}</div>" if cluster.what_changed else ""}
           <div style='margin-top:4px;color:#2b2b2b;'><strong>Why it matters:</strong> {escape(cluster.why_it_matters)}</div>
         </li>
         """
@@ -83,7 +90,9 @@ def render_snapshot_html(snapshot: DailySnapshot) -> str:
         <div style="letter-spacing:0.08em;font-size:12px;text-transform:uppercase;color:#7a5c2e;">CLU Daily Snapshot</div>
         <h1 style="margin:8px 0 12px;font-size:36px;">{escape(snapshot.snapshot_date)}</h1>
         <p style="font-size:18px;line-height:1.5;">{escape(snapshot.lead_summary)}</p>
+        {f"<p style='font-size:16px;line-height:1.5;color:#333;'><strong>What changed:</strong> {escape(snapshot.what_changed_summary)}</p>" if snapshot.what_changed_summary else ""}
         {f"<p style='font-size:16px;line-height:1.5;color:#333;'><strong>Outlook:</strong> {escape(snapshot.outlook)}</p>" if snapshot.outlook else ""}
+        {f"<p style='font-size:16px;line-height:1.5;color:#5c2b2b;'><strong>Risk:</strong> {escape(snapshot.risk_summary)}</p>" if snapshot.risk_summary else ""}
       </header>
       <section style="margin-bottom:24px;padding:20px;border-radius:12px;background:#efe6d1;">
         <h2 style="margin-top:0;">Themes</h2>

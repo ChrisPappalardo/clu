@@ -5,7 +5,11 @@ type StoryCluster = {
   section: string;
   title: string;
   summary: string;
+  what_changed?: string | null;
+  why_now?: string | null;
   why_it_matters: string;
+  risk_level?: string | null;
+  risk_summary?: string | null;
   importance_score: number;
   novelty_score: number;
   watch_points: string[];
@@ -23,6 +27,9 @@ type SnapshotSection = {
   title: string;
   summary: string;
   narrative?: string | null;
+  what_changed?: string | null;
+  why_now?: string | null;
+  risk_summary?: string | null;
   metrics: SnapshotMetric[];
   clusters: StoryCluster[];
 };
@@ -43,7 +50,9 @@ type SnapshotIndexEntry = {
 type Snapshot = {
   snapshot_date: string;
   lead_summary: string;
+  what_changed_summary?: string | null;
   outlook?: string | null;
+  risk_summary?: string | null;
   themes: string[];
   top_story_ids: string[];
   watch_items: WatchItem[];
@@ -99,7 +108,9 @@ export default function App() {
         <div className="eyebrow">CLU Daily Snapshot</div>
         <h1>{snapshot.snapshot_date}</h1>
         <p className="lead">{snapshot.lead_summary}</p>
-        {snapshot.outlook && <p className="outlook">{snapshot.outlook}</p>}
+        {snapshot.what_changed_summary && <p className="outlook"><strong>What changed:</strong> {snapshot.what_changed_summary}</p>}
+        {snapshot.outlook && <p className="outlook"><strong>Outlook:</strong> {snapshot.outlook}</p>}
+        {snapshot.risk_summary && <p className="riskLine"><strong>Risk:</strong> {snapshot.risk_summary}</p>}
         <div className="themeRow">
           {snapshot.themes.map((theme) => (
             <span className="theme" key={theme}>{theme}</span>
@@ -115,10 +126,14 @@ export default function App() {
               <div className="storyCard" key={story.id}>
                 <strong>{story.title}</strong>
                 <span>{story.summary}</span>
+                {story.what_changed && <p><strong>What changed:</strong> {story.what_changed}</p>}
+                {story.why_now && <p><strong>Why now:</strong> {story.why_now}</p>}
                 <small>{story.why_it_matters}</small>
+                {story.risk_summary && <em className="riskText">{story.risk_summary}</em>}
                 <div className="scoreRow">
                   <span>Importance {story.importance_score.toFixed(2)}</span>
                   <span>Novelty {story.novelty_score.toFixed(2)}</span>
+                  {story.risk_level && <span>Risk {story.risk_level}</span>}
                 </div>
               </div>
             ))}
@@ -167,6 +182,9 @@ export default function App() {
               <h2>{section.title}</h2>
               <p>{section.summary}</p>
               {section.narrative && <p className="narrative">{section.narrative}</p>}
+              {section.what_changed && <p className="detailLine"><strong>What changed:</strong> {section.what_changed}</p>}
+              {section.why_now && <p className="detailLine"><strong>Why now:</strong> {section.why_now}</p>}
+              {section.risk_summary && <p className="riskText"><strong>Risk:</strong> {section.risk_summary}</p>}
             </div>
             {section.clusters.length > 0 && (
               <div className="stack">
@@ -174,7 +192,10 @@ export default function App() {
                   <div className="item storyCard" key={cluster.id}>
                     <strong>{cluster.title}</strong>
                     <span>{cluster.summary}</span>
+                    {cluster.what_changed && <p><strong>What changed:</strong> {cluster.what_changed}</p>}
+                    {cluster.why_now && <p><strong>Why now:</strong> {cluster.why_now}</p>}
                     <small>{cluster.why_it_matters}</small>
+                    {cluster.risk_summary && <em className="riskText">{cluster.risk_summary}</em>}
                   </div>
                 ))}
               </div>

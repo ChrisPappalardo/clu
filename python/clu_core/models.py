@@ -111,7 +111,11 @@ class StoryCluster(BaseModel):
     section: str
     title: str
     summary: str
+    what_changed: str | None = None
+    why_now: str | None = None
     why_it_matters: str
+    risk_level: Literal["high", "medium", "low"] | None = None
+    risk_summary: str | None = None
     importance_score: float
     novelty_score: float
     significance: Literal["high", "medium", "low"]
@@ -139,6 +143,9 @@ class SnapshotSection(BaseModel):
     kind: Literal["news", "data", "mixed"]
     summary: str
     narrative: str | None = None
+    what_changed: str | None = None
+    why_now: str | None = None
+    risk_summary: str | None = None
     items: list[SnapshotItem] = Field(default_factory=list)
     metrics: list[SnapshotMetric] = Field(default_factory=list)
     clusters: list[StoryCluster] = Field(default_factory=list)
@@ -165,7 +172,9 @@ class DailySnapshot(BaseModel):
     generated_at: datetime
     timezone: str
     lead_summary: str
+    what_changed_summary: str | None = None
     outlook: str | None = None
+    risk_summary: str | None = None
     themes: list[str] = Field(default_factory=list)
     top_story_ids: list[str] = Field(default_factory=list)
     watch_items: list[WatchItem] = Field(default_factory=list)

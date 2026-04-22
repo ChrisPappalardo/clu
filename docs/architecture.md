@@ -37,7 +37,9 @@ The top-level report object is `DailySnapshot`. It contains:
 
 - briefing metadata: `snapshot_id`, `snapshot_date`, `generated_at`, `timezone`
 - one `lead_summary`
+- one `what_changed_summary`
 - one `outlook`
+- one `risk_summary`
 - high-level `themes`
 - ranked `top_story_ids`
 - `watch_items[]`
@@ -45,9 +47,11 @@ The top-level report object is `DailySnapshot`. It contains:
   - `id`, `title`, `kind`
   - section summary
   - section narrative
+  - section `what_changed`, `why_now`, and `risk_summary`
   - `items[]` for news or event content
   - `metrics[]` for structured data signals
 - `clusters[]` for ranked story-level briefings
+  - cluster `what_changed`, `why_now`, `why_it_matters`, and risk framing
 - `memory` describing continuity from prior snapshots
 - `source_attributions[]`
 - `generation_notes[]`
