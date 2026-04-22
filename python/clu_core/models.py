@@ -49,6 +49,8 @@ class AIConfig(BaseModel):
     enabled: bool = True
     max_input_items_per_section: int = 12
     history_window_days: int = 7
+    base_url: str | None = None
+    api_key_env: str = "OPENAI_API_KEY"
 
 
 class SourceConfig(BaseModel):

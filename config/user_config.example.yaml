@@ -38,9 +38,11 @@ briefing:
     interpretation_level: high
 
 ai:
-  provider: openai
-  model: gpt-5-mini
+  provider: ollama
+  model: qwen2.5:3b
   enabled: true
+  base_url: http://host.docker.internal:11434/v1/
+  api_key_env: OLLAMA_API_KEY
 
 sources:
   - id: guardian-world

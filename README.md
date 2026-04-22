@@ -30,15 +30,16 @@ The next implementation phase is hardening source selection and adding richer ra
 
 1. Copy `.env.example` to `.env`.
 2. Copy `config/user_config.example.yaml` to `config/user_config.yaml`.
-3. Add API keys for any enabled keyed sources.
-4. Run `docker compose up --build`.
-5. Trigger the ingest once:
+3. If you want local AI synthesis, make sure Ollama is running on the host and that the configured model is pulled, for example `ollama pull qwen2.5:3b`.
+4. Add API keys for any enabled keyed sources.
+5. Run `docker compose up --build`.
+6. Trigger the ingest once:
 
 ```bash
 docker compose run --rm ingest
 ```
 
-6. Open:
+7. Open:
    - API: `http://localhost:8000/api/v1/snapshot/latest`
    - Snapshot index: `http://localhost:8000/api/v1/snapshots`
    - Dashboard: `http://localhost:5173`
@@ -59,5 +60,6 @@ Create the `logs/` directory before enabling the job.
 - Each ingest run now writes an immutable timestamped snapshot artifact in addition to `latest_snapshot.*`.
 - The ingest path also writes `snapshot_index.json` so the API and UI can inspect prior briefings.
 - Legacy pre-run-id snapshots are ignored for briefing history so same-day continuity is based on immutable runs only.
-- If `OPENAI_API_KEY` is not set, the ingest service falls back to heuristic summaries so the pipeline can still run.
+- The default AI config targets a host-run Ollama server through its OpenAI-compatible API at `http://host.docker.internal:11434/v1/`.
+- If the configured AI endpoint is unavailable, the ingest service falls back to heuristic summaries so the pipeline can still run.
 - The current scaffold uses file-based report persistence with briefing history. The shared schema is designed so a database-backed implementation can be added without changing the API or dashboard contract.

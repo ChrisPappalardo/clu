@@ -87,16 +87,19 @@ This is the current recommended source mix for the first implementation phase. I
 
 ## AI synthesis
 
-### OpenAI Responses API
+### Ollama OpenAI-Compatible API
 
-- Purpose: structured synthesis of the collected signal into a stored daily briefing
-- Auth: API key required
+- Purpose: local structured synthesis of the collected signal into a stored daily briefing
+- Auth: an API key is required by the OpenAI client, but Ollama ignores it; `ollama` is a sufficient placeholder
 - Docs:
-  - https://platform.openai.com/docs/api-reference/responses/create
-  - https://platform.openai.com/docs/guides/structured-outputs?api-mode=responses&lang=python
-  - https://platform.openai.com/docs/models/gpt-5-mini
+  - https://docs.ollama.com/openai
+  - https://docs.ollama.com/api/openai-compatibility
 - Current default:
-  - model: `gpt-5-mini`
+  - provider: `ollama`
+  - endpoint: `http://host.docker.internal:11434/v1/`
+  - model: `qwen2.5:3b`
 - User setup:
-  1. Create an OpenAI API key.
-  2. Put it in `.env` as `OPENAI_API_KEY=...`
+  1. Install and run Ollama on the host machine.
+  2. Pull the configured model, for example `ollama pull qwen2.5:3b`.
+  3. Put `OLLAMA_API_KEY=ollama` in `.env` unless you want a different placeholder value.
+  4. Keep the configured base URL pointed at the host from inside Docker: `http://host.docker.internal:11434/v1/`.

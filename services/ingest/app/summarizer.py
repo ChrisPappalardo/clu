@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime, timezone
+from typing import TypeVar
 
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
 from clu_core.models import (
+    AIConfig,
     AppConfig,
     DailySnapshot,
     SnapshotSection,
@@ -51,6 +53,60 @@ class AIGlobalBrief(BaseModel):
     top_story_ids: list[str] = Field(default_factory=list)
     watch_items: list[WatchItem] = Field(default_factory=list)
     generation_notes: list[str] = Field(default_factory=list)
+
+
+T = TypeVar("T", bound=BaseModel)
+
+
+def _build_client(ai_config: AIConfig) -> OpenAI:
+    api_key = os.getenv(ai_config.api_key_env, "")
+    base_url = ai_config.base_url or None
+    provider = ai_config.provider.lower()
+    if provider == "ollama":
+        return OpenAI(
+            base_url=base_url or "http://host.docker.internal:11434/v1/",
+            api_key=api_key or "ollama",
+        )
+    return OpenAI(
+        base_url=base_url,
+        api_key=api_key,
+    )
+
+
+def _has_usable_ai_credentials(ai_config: AIConfig) -> bool:
+    if ai_config.provider.lower() == "ollama":
+        return True
+    return bool(os.getenv(ai_config.api_key_env, ""))
+
+
+def _json_schema_payload(model_class: type[T]) -> dict:
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": model_class.__name__,
+            "schema": model_class.model_json_schema(),
+        },
+    }
+
+
+def _structured_chat_completion(
+    client: OpenAI,
+    ai_config: AIConfig,
+    *,
+    system_prompt: str,
+    user_prompt: str,
+    model_class: type[T],
+) -> T:
+    completion = client.chat.completions.create(
+        model=ai_config.model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        response_format=_json_schema_payload(model_class),
+    )
+    content = completion.choices[0].message.content or "{}"
+    return model_class.model_validate_json(content)
 
 
 def build_snapshot_payload(
@@ -201,30 +257,22 @@ def _run_interpretation_pass(
     history_payload: list[dict],
     current_payload: dict,
 ) -> AIInterpretationPass:
-    response = client.responses.parse(
-        model=config.ai.model,
-        input=[
-            {
-                "role": "system",
-                "content": (
-                    "You are an analyst producing structured morning-briefing interpretations. "
-                    "For each cluster and section, explain what changed, why it matters now, and the main risk. "
-                    "Be neutral, concise, and avoid speculation beyond the provided evidence."
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    "Interpret the current ranked clusters and sections in light of the recent snapshot history. "
-                    f"Preferences: {json.dumps(config.briefing.model_dump(), default=str)}. "
-                    f"History: {json.dumps(history_payload, default=str)}. "
-                    f"Current snapshot: {json.dumps(current_payload, default=str)}."
-                ),
-            },
-        ],
-        text_format=AIInterpretationPass,
+    return _structured_chat_completion(
+        client,
+        config.ai,
+        system_prompt=(
+            "You are an analyst producing structured morning-briefing interpretations. "
+            "For each cluster and section, explain what changed, why it matters now, and the main risk. "
+            "Be neutral, concise, and avoid speculation beyond the provided evidence."
+        ),
+        user_prompt=(
+            "Interpret the current ranked clusters and sections in light of the recent snapshot history. "
+            f"Preferences: {json.dumps(config.briefing.model_dump(), default=str)}. "
+            f"History: {json.dumps(history_payload, default=str)}. "
+            f"Current snapshot: {json.dumps(current_payload, default=str)}."
+        ),
+        model_class=AIInterpretationPass,
     )
-    return response.output_parsed
 
 
 def _run_global_brief_pass(
@@ -233,30 +281,22 @@ def _run_global_brief_pass(
     history_payload: list[dict],
     enriched_snapshot: DailySnapshot,
 ) -> AIGlobalBrief:
-    response = client.responses.parse(
-        model=config.ai.model,
-        input=[
-            {
-                "role": "system",
-                "content": (
-                    "You create a neutral, high-leverage daily world briefing. "
-                    "Summarize what changed since the prior briefing, identify the biggest risks, and tell the reader what to watch next. "
-                    "Do not invent facts."
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    "Using the enriched snapshot below, produce the final top-level morning briefing. "
-                    f"Preferences: {json.dumps(config.briefing.model_dump(), default=str)}. "
-                    f"History: {json.dumps(history_payload, default=str)}. "
-                    f"Enriched snapshot: {json.dumps(enriched_snapshot.model_dump(mode='json'), default=str)}"
-                ),
-            },
-        ],
-        text_format=AIGlobalBrief,
+    return _structured_chat_completion(
+        client,
+        config.ai,
+        system_prompt=(
+            "You create a neutral, high-leverage daily world briefing. "
+            "Summarize what changed since the prior briefing, identify the biggest risks, and tell the reader what to watch next. "
+            "Do not invent facts."
+        ),
+        user_prompt=(
+            "Using the enriched snapshot below, produce the final top-level morning briefing. "
+            f"Preferences: {json.dumps(config.briefing.model_dump(), default=str)}. "
+            f"History: {json.dumps(history_payload, default=str)}. "
+            f"Enriched snapshot: {json.dumps(enriched_snapshot.model_dump(mode='json'), default=str)}"
+        ),
+        model_class=AIGlobalBrief,
     )
-    return response.output_parsed
 
 
 def synthesize_snapshot(
@@ -264,11 +304,10 @@ def synthesize_snapshot(
     base_snapshot: DailySnapshot,
     history: list[DailySnapshot],
 ) -> DailySnapshot:
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not config.ai.enabled or not api_key:
+    if not config.ai.enabled or not _has_usable_ai_credentials(config.ai):
         return base_snapshot
 
-    client = OpenAI(api_key=api_key)
+    client = _build_client(config.ai)
     history_payload = _history_payload(config, history)
     current_payload = _current_payload(base_snapshot, config)
 
