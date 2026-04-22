@@ -1,0 +1,59 @@
+# CLU
+
+CLU is a single-user daily world snapshot application. It pulls a configurable mix of news and structured world data, normalizes it into one canonical briefing schema, uses AI to synthesize the signal, stores JSON and HTML report artifacts, serves them through a Python API, and renders an interactive React dashboard.
+
+## Current scope
+
+This repository now contains the initial project scaffold:
+
+- shared Python models for user config, source payloads, and the daily snapshot
+- a Python ingest service with configurable source adapters
+- a Python FastAPI service serving the latest snapshot and HTML report
+- a React dashboard wired to the canonical snapshot schema
+- Docker Compose for local orchestration
+- setup docs for source selection and API keys
+
+The next implementation phase is hardening source selection and adding richer ranking, persistence, and testing.
+
+## Repository layout
+
+- `config/user_config.example.yaml`: single-user configuration template
+- `docs/architecture.md`: system design and canonical schema notes
+- `docs/source_matrix.md`: source choices, auth requirements, and user setup steps
+- `python/clu_core`: shared Python models and HTML rendering
+- `services/ingest`: scheduled collection and report generation
+- `services/api`: backend API service
+- `web`: React dashboard
+
+## Quick start
+
+1. Copy `.env.example` to `.env`.
+2. Copy `config/user_config.example.yaml` to `config/user_config.yaml`.
+3. Add API keys for any enabled keyed sources.
+4. Run `docker compose up --build`.
+5. Trigger the ingest once:
+
+```bash
+docker compose run --rm ingest
+```
+
+6. Open:
+   - API: `http://localhost:8000/api/v1/snapshot/latest`
+   - Dashboard: `http://localhost:5173`
+
+## Cron
+
+Example host crontab entry for a 6:30 AM local snapshot:
+
+```cron
+30 6 * * * cd /home/cpappalardo/src/demos/clu && /usr/bin/docker compose run --rm ingest >> /home/cpappalardo/src/demos/clu/logs/ingest.log 2>&1
+```
+
+Create the `logs/` directory before enabling the job.
+
+## Notes
+
+- The ingest path writes briefing artifacts under `data/output/`.
+- If `OPENAI_API_KEY` is not set, the ingest service falls back to heuristic summaries so the pipeline can still run.
+- The current scaffold uses file-based report persistence. The shared schema is designed so a database-backed implementation can be added without changing the API or dashboard contract.
+

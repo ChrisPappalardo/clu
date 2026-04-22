@@ -1,0 +1,129 @@
+user:
+  timezone: America/Los_Angeles
+  home_location:
+    label: San Francisco, CA
+    latitude: 37.7749
+    longitude: -122.4194
+  delivery:
+    store_html_report: true
+    store_json_report: true
+    generate_email_friendly_html: true
+
+briefing:
+  max_headlines_per_section: 6
+  max_sections: 6
+  include_sections:
+    - world-news
+    - macro
+    - markets
+    - weather
+    - science
+    - disruptions
+  priorities:
+    geography:
+      - global
+      - united-states
+      - europe
+      - asia
+    topics:
+      - geopolitics
+      - macroeconomics
+      - energy
+      - technology
+      - climate
+      - public-health
+  tone:
+    style: concise
+    viewpoint: neutral
+    interpretation_level: high
+
+ai:
+  provider: openai
+  model: gpt-5-mini
+  enabled: true
+
+sources:
+  - id: guardian-world
+    type: guardian
+    enabled: true
+    section: world-news
+    display_name: The Guardian World
+    params:
+      api_key_env: GUARDIAN_API_KEY
+      query: "(geopolitics OR diplomacy OR conflict OR election OR climate)"
+      page_size: 10
+
+  - id: gdelt-world
+    type: gdelt
+    enabled: true
+    section: world-news
+    display_name: GDELT Global Coverage
+    params:
+      query: "(geopolitics OR macroeconomy OR climate OR energy)"
+      max_records: 10
+      timespan: 1d
+
+  - id: npr-rss
+    type: rss
+    enabled: true
+    section: world-news
+    display_name: NPR World
+    params:
+      feed_url: https://feeds.npr.org/1004/rss.xml
+      max_items: 10
+
+  - id: fred-macro
+    type: fred
+    enabled: true
+    section: macro
+    display_name: FRED Macro
+    params:
+      api_key_env: FRED_API_KEY
+      series:
+        - CPIAUCSL
+        - UNRATE
+        - FEDFUNDS
+        - DGS10
+
+  - id: world-bank
+    type: world_bank
+    enabled: true
+    section: macro
+    display_name: World Bank Indicators
+    params:
+      indicators:
+        - code: NY.GDP.MKTP.CD
+          countries: us;cn;eu
+        - code: SP.POP.TOTL
+          countries: us;in;cn
+
+  - id: alpha-vantage
+    type: alpha_vantage
+    enabled: false
+    section: markets
+    display_name: Alpha Vantage Markets
+    params:
+      api_key_env: ALPHAVANTAGE_API_KEY
+      functions:
+        - function: TOP_GAINERS_LOSERS
+
+  - id: open-meteo-home
+    type: open_meteo
+    enabled: true
+    section: weather
+    display_name: Open-Meteo Home Forecast
+    params:
+      daily:
+        - temperature_2m_max
+        - temperature_2m_min
+        - precipitation_sum
+        - weather_code
+
+  - id: usgs-quakes
+    type: usgs
+    enabled: true
+    section: disruptions
+    display_name: USGS Significant Earthquakes
+    params:
+      feed: significant_day
+
