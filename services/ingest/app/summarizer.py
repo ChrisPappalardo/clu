@@ -60,6 +60,15 @@ class AIGlobalBrief(BaseModel):
 T = TypeVar("T", bound=BaseModel)
 
 
+def _preferred_top_clusters(clusters: list[StoryCluster]) -> list[StoryCluster]:
+    robust = [
+        cluster
+        for cluster in clusters
+        if len(cluster.source_ids) >= 2 or cluster.significance == "high" or cluster.risk_level == "high"
+    ]
+    return robust or clusters
+
+
 def _build_client(ai_config: AIConfig) -> OpenAI:
     api_key = os.getenv(ai_config.api_key_env, "")
     base_url = ai_config.base_url or None
@@ -121,6 +130,7 @@ def build_snapshot_payload(
     memory,
 ) -> DailySnapshot:
     snapshot_id = generated_at.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    preferred_top = _preferred_top_clusters(clusters)
     return DailySnapshot(
         snapshot_id=snapshot_id,
         snapshot_date=generated_at.date().isoformat(),
@@ -135,14 +145,14 @@ def build_snapshot_payload(
         outlook="Watch the top-ranked stories for confirmation, official responses, and follow-on market or policy effects.",
         risk_summary="Risk remains heuristic until AI interpretation is enabled; use top stories and watch items as the main signal.",
         themes=[cluster.title for cluster in clusters[:3]],
-        top_story_ids=[cluster.id for cluster in clusters[:5]],
+        top_story_ids=[cluster.id for cluster in preferred_top[:5]],
         watch_items=[
             WatchItem(
                 label=cluster.title,
                 note=(cluster.watch_points[0] if cluster.watch_points else "Monitor for fresh facts and downstream consequences."),
                 section_id=cluster.section,
             )
-            for cluster in clusters[:3]
+            for cluster in preferred_top[:3]
         ],
         sections=[
             section.model_copy(
@@ -265,7 +275,8 @@ def _run_interpretation_pass(
         system_prompt=(
             "You are an analyst producing structured morning-briefing interpretations. "
             "For each cluster and section, explain what changed, why it matters now, and the main risk. "
-            "Be neutral, concise, and avoid speculation beyond the provided evidence."
+            "Be neutral, concise, and avoid speculation beyond the provided evidence. "
+            "Do not overstate thin single-source stories unless they are clearly high-significance."
         ),
         user_prompt=(
             "Interpret the current ranked clusters and sections in light of the recent snapshot history. "
@@ -289,7 +300,8 @@ def _run_global_brief_pass(
         system_prompt=(
             "You create a neutral, high-leverage daily world briefing. "
             "Summarize what changed since the prior briefing, identify the biggest risks, and tell the reader what to watch next. "
-            "Do not invent facts."
+            "Do not invent facts. Prefer clusters with broader source support or clearly high significance when selecting top stories. "
+            "Avoid repeating the same point across lead summary, themes, and watch items."
         ),
         user_prompt=(
             "Using the enriched snapshot below, produce the final top-level morning briefing. "
@@ -371,7 +383,7 @@ def synthesize_snapshot(
         global_brief = _run_global_brief_pass(client, config, history_payload, enriched_snapshot)
         top_story_ids = [story_id for story_id in global_brief.top_story_ids if story_id in cluster_lookup]
         if not top_story_ids:
-            top_story_ids = enriched_snapshot.top_story_ids
+            top_story_ids = [cluster.id for cluster in _preferred_top_clusters(enriched_snapshot.clusters)[:5]]
 
         return enriched_snapshot.model_copy(
             update={
