@@ -58,6 +58,14 @@ class AIGlobalBrief(BaseModel):
 
 
 T = TypeVar("T", bound=BaseModel)
+META_PHRASES = (
+    "would generally",
+    "here is an example",
+    "based on the information provided",
+    "based on the dataset",
+    "the lead summary",
+    "this summary",
+)
 
 
 def _preferred_top_clusters(clusters: list[StoryCluster]) -> list[StoryCluster]:
@@ -118,6 +126,13 @@ def _structured_chat_completion(
     )
     content = completion.choices[0].message.content or "{}"
     return model_class.model_validate_json(content)
+
+
+def _contains_meta_language(text: str | None) -> bool:
+    if not text:
+        return False
+    lowered = text.lower()
+    return any(phrase in lowered for phrase in META_PHRASES)
 
 
 def build_snapshot_payload(
@@ -301,7 +316,8 @@ def _run_global_brief_pass(
             "You create a neutral, high-leverage daily world briefing. "
             "Summarize what changed since the prior briefing, identify the biggest risks, and tell the reader what to watch next. "
             "Do not invent facts. Prefer clusters with broader source support or clearly high significance when selecting top stories. "
-            "Avoid repeating the same point across lead summary, themes, and watch items."
+            "Avoid repeating the same point across lead summary, themes, and watch items. "
+            "Write direct declarative prose only. Do not mention prompts, datasets, examples, or how the summary was produced."
         ),
         user_prompt=(
             "Using the enriched snapshot below, produce the final top-level morning briefing. "
@@ -381,6 +397,8 @@ def synthesize_snapshot(
         )
 
         global_brief = _run_global_brief_pass(client, config, history_payload, enriched_snapshot)
+        if _contains_meta_language(global_brief.lead_summary) or _contains_meta_language(global_brief.what_changed_summary):
+            raise ValueError("AI global brief contained meta/template language.")
         top_story_ids = [story_id for story_id in global_brief.top_story_ids if story_id in cluster_lookup]
         if not top_story_ids:
             top_story_ids = [cluster.id for cluster in _preferred_top_clusters(enriched_snapshot.clusters)[:5]]
@@ -397,7 +415,7 @@ def synthesize_snapshot(
                 "generation_notes": enriched_snapshot.generation_notes + global_brief.generation_notes,
             }
         )
-    except (APIConnectionError, APIError, ValidationError, json.JSONDecodeError) as exc:
+    except (APIConnectionError, APIError, ValidationError, ValueError, json.JSONDecodeError) as exc:
         return base_snapshot.model_copy(
             update={
                 "generation_notes": base_snapshot.generation_notes

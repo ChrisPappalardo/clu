@@ -52,8 +52,14 @@ sources:
     display_name: The Guardian World
     params:
       api_key_env: GUARDIAN_API_KEY
+      section: world
       query: "(geopolitics OR diplomacy OR conflict OR election OR climate)"
       page_size: 10
+      exclude_url_patterns:
+        - /commentisfree/
+        - /opinion/
+      exclude_title_patterns:
+        - " | "
 
   - id: gdelt-world
     type: gdelt
@@ -72,6 +78,29 @@ sources:
     display_name: NPR World
     params:
       feed_url: https://feeds.npr.org/1004/rss.xml
+      max_items: 10
+      exclude_title_patterns:
+        - ".*\\sAnd,\\s.*"
+        - "^How\\s"
+        - "^Why\\s"
+        - "^Greetings\\s"
+
+  - id: bbc-world-rss
+    type: rss
+    enabled: true
+    section: world-news
+    display_name: BBC World
+    params:
+      feed_url: http://feeds.bbci.co.uk/news/world/rss.xml
+      max_items: 10
+
+  - id: dw-world-rss
+    type: rss
+    enabled: true
+    section: world-news
+    display_name: DW World
+    params:
+      feed_url: https://rss.dw.com/rdf/rss-en-world
       max_items: 10
 
   - id: fred-macro

@@ -34,10 +34,13 @@ This is the current recommended source mix for the first implementation phase. I
 - Auth: usually no key required
 - Example feeds:
   - NPR World: https://feeds.npr.org/1004/rss.xml
+  - BBC World: http://feeds.bbci.co.uk/news/world/rss.xml
+  - DW World: https://rss.dw.com/rdf/rss-en-world
 - Notes:
   - RSS lets the user keep a curated source list
   - adapter is generic, so additional feeds can be added through config
   - for dependable daily operation, prefer direct publisher feeds first and add GDELT only as a secondary discovery source
+  - use feed-level exclusion filters to keep obvious feature, opinion, and mixed-format items out of the hard-news briefing
 
 ## Structured world data
 
