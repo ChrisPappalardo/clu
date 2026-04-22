@@ -61,5 +61,6 @@ Create the `logs/` directory before enabling the job.
 - The ingest path also writes `snapshot_index.json` so the API and UI can inspect prior briefings.
 - Legacy pre-run-id snapshots are ignored for briefing history so same-day continuity is based on immutable runs only.
 - The default AI config targets a host-run Ollama server through its OpenAI-compatible API at `http://host.docker.internal:11434/v1/`.
+- `OLLAMA_MODEL` and `OLLAMA_BASE_URL` can be changed in `.env` without editing the YAML config.
 - If the configured AI endpoint is unavailable, the ingest service falls back to heuristic summaries so the pipeline can still run.
 - The current scaffold uses file-based report persistence with briefing history. The shared schema is designed so a database-backed implementation can be added without changing the API or dashboard contract.

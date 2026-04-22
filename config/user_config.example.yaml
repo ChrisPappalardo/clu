@@ -39,9 +39,9 @@ briefing:
 
 ai:
   provider: ollama
-  model: qwen2.5:3b
+  model: ${OLLAMA_MODEL}
   enabled: true
-  base_url: http://host.docker.internal:11434/v1/
+  base_url: ${OLLAMA_BASE_URL}
   api_key_env: OLLAMA_API_KEY
 
 sources:

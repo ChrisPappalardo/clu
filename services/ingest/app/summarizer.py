@@ -6,7 +6,9 @@ from datetime import datetime, timezone
 from typing import TypeVar
 
 from openai import OpenAI
+from openai import APIConnectionError, APIError
 from pydantic import BaseModel, Field
+from pydantic import ValidationError
 
 from clu_core.models import (
     AIConfig,
@@ -311,69 +313,82 @@ def synthesize_snapshot(
     history_payload = _history_payload(config, history)
     current_payload = _current_payload(base_snapshot, config)
 
-    interpretation = _run_interpretation_pass(client, config, history_payload, current_payload)
-    cluster_updates = {row.cluster_id: row for row in interpretation.cluster_updates}
-    section_updates = {row.section_id: row for row in interpretation.section_updates}
+    try:
+        interpretation = _run_interpretation_pass(client, config, history_payload, current_payload)
+        cluster_updates = {row.cluster_id: row for row in interpretation.cluster_updates}
+        section_updates = {row.section_id: row for row in interpretation.section_updates}
 
-    updated_clusters = []
-    for cluster in base_snapshot.clusters:
-        update = cluster_updates.get(cluster.id)
-        if update is None:
-            updated_clusters.append(cluster)
-            continue
-        updated_clusters.append(
-            cluster.model_copy(
-                update={
-                    "summary": update.summary,
-                    "what_changed": update.what_changed,
-                    "why_now": update.why_now,
-                    "why_it_matters": update.why_it_matters,
-                    "risk_level": update.risk_level if update.risk_level in {"high", "medium", "low"} else cluster.risk_level,
-                    "risk_summary": update.risk_summary,
-                    "watch_points": update.watch_points or cluster.watch_points,
-                }
+        updated_clusters = []
+        for cluster in base_snapshot.clusters:
+            update = cluster_updates.get(cluster.id)
+            if update is None:
+                updated_clusters.append(cluster)
+                continue
+            updated_clusters.append(
+                cluster.model_copy(
+                    update={
+                        "summary": update.summary,
+                        "what_changed": update.what_changed,
+                        "why_now": update.why_now,
+                        "why_it_matters": update.why_it_matters,
+                        "risk_level": update.risk_level if update.risk_level in {"high", "medium", "low"} else cluster.risk_level,
+                        "risk_summary": update.risk_summary,
+                        "watch_points": update.watch_points or cluster.watch_points,
+                    }
+                )
             )
-        )
-    cluster_lookup = {cluster.id: cluster for cluster in updated_clusters}
+        cluster_lookup = {cluster.id: cluster for cluster in updated_clusters}
 
-    updated_sections = []
-    for section in base_snapshot.sections:
-        update = section_updates.get(section.id)
-        updated_sections.append(
-            section.model_copy(
-                update={
-                    "summary": update.summary if update else section.summary,
-                    "narrative": update.narrative if update else section.narrative,
-                    "what_changed": update.what_changed if update else section.what_changed,
-                    "why_now": update.why_now if update else section.why_now,
-                    "risk_summary": update.risk_summary if update else section.risk_summary,
-                    "clusters": [cluster_lookup[cluster.id] for cluster in section.clusters if cluster.id in cluster_lookup],
-                }
+        updated_sections = []
+        for section in base_snapshot.sections:
+            update = section_updates.get(section.id)
+            updated_sections.append(
+                section.model_copy(
+                    update={
+                        "summary": update.summary if update else section.summary,
+                        "narrative": update.narrative if update else section.narrative,
+                        "what_changed": update.what_changed if update else section.what_changed,
+                        "why_now": update.why_now if update else section.why_now,
+                        "risk_summary": update.risk_summary if update else section.risk_summary,
+                        "clusters": [cluster_lookup[cluster.id] for cluster in section.clusters if cluster.id in cluster_lookup],
+                    }
+                )
             )
+
+        enriched_snapshot = base_snapshot.model_copy(
+            update={
+                "sections": updated_sections,
+                "clusters": updated_clusters,
+                "generation_notes": [
+                    note
+                    for note in base_snapshot.generation_notes
+                    if note != "Generated with heuristic fallback briefing."
+                ]
+                + interpretation.generation_notes,
+            }
         )
 
-    enriched_snapshot = base_snapshot.model_copy(
-        update={
-            "sections": updated_sections,
-            "clusters": updated_clusters,
-            "generation_notes": base_snapshot.generation_notes + interpretation.generation_notes,
-        }
-    )
+        global_brief = _run_global_brief_pass(client, config, history_payload, enriched_snapshot)
+        top_story_ids = [story_id for story_id in global_brief.top_story_ids if story_id in cluster_lookup]
+        if not top_story_ids:
+            top_story_ids = enriched_snapshot.top_story_ids
 
-    global_brief = _run_global_brief_pass(client, config, history_payload, enriched_snapshot)
-    top_story_ids = [story_id for story_id in global_brief.top_story_ids if story_id in cluster_lookup]
-    if not top_story_ids:
-        top_story_ids = enriched_snapshot.top_story_ids
-
-    return enriched_snapshot.model_copy(
-        update={
-            "lead_summary": global_brief.lead_summary,
-            "what_changed_summary": global_brief.what_changed_summary,
-            "outlook": global_brief.outlook,
-            "risk_summary": global_brief.risk_summary,
-            "themes": global_brief.themes or enriched_snapshot.themes,
-            "top_story_ids": top_story_ids,
-            "watch_items": global_brief.watch_items or enriched_snapshot.watch_items,
-            "generation_notes": enriched_snapshot.generation_notes + global_brief.generation_notes,
-        }
-    )
+        return enriched_snapshot.model_copy(
+            update={
+                "lead_summary": global_brief.lead_summary,
+                "what_changed_summary": global_brief.what_changed_summary,
+                "outlook": global_brief.outlook,
+                "risk_summary": global_brief.risk_summary,
+                "themes": global_brief.themes or enriched_snapshot.themes,
+                "top_story_ids": top_story_ids,
+                "watch_items": global_brief.watch_items or enriched_snapshot.watch_items,
+                "generation_notes": enriched_snapshot.generation_notes + global_brief.generation_notes,
+            }
+        )
+    except (APIConnectionError, APIError, ValidationError, json.JSONDecodeError) as exc:
+        return base_snapshot.model_copy(
+            update={
+                "generation_notes": base_snapshot.generation_notes
+                + [f"AI synthesis failed and fell back to heuristic briefing: {exc}"],
+            }
+        )

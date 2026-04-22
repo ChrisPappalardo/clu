@@ -102,4 +102,5 @@ This is the current recommended source mix for the first implementation phase. I
   1. Install and run Ollama on the host machine.
   2. Pull the configured model, for example `ollama pull qwen2.5:3b`.
   3. Put `OLLAMA_API_KEY=ollama` in `.env` unless you want a different placeholder value.
-  4. Keep the configured base URL pointed at the host from inside Docker: `http://host.docker.internal:11434/v1/`.
+  4. Set `OLLAMA_MODEL` in `.env` to the exact model tag you want to use.
+  5. Keep the configured base URL pointed at the host from inside Docker with `OLLAMA_BASE_URL=http://host.docker.internal:11434/v1/`.
