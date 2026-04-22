@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -8,13 +9,19 @@ from pydantic import ValidationError
 from clu_core.models import DailySnapshot
 
 
+RUN_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z$")
+
+
 def load_snapshot(path: Path) -> DailySnapshot | None:
     if not path.exists():
         return None
     try:
-        return DailySnapshot.model_validate_json(path.read_text(encoding="utf-8"))
+        snapshot = DailySnapshot.model_validate_json(path.read_text(encoding="utf-8"))
     except ValidationError:
         return None
+    if not RUN_ID_PATTERN.match(snapshot.snapshot_id):
+        return None
+    return snapshot
 
 
 def list_snapshot_paths(output_dir: Path) -> list[Path]:

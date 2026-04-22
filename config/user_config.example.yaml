@@ -55,7 +55,7 @@ sources:
 
   - id: gdelt-world
     type: gdelt
-    enabled: true
+    enabled: false
     section: world-news
     display_name: GDELT Global Coverage
     params:
@@ -126,4 +126,3 @@ sources:
     display_name: USGS Significant Earthquakes
     params:
       feed: significant_day
-

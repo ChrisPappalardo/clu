@@ -26,6 +26,7 @@ This is the current recommended source mix for the first implementation phase. I
 - Notes:
   - good for global breadth and topic search
   - use as a discovery layer, not as the sole editorial authority
+  - keep it opt-in by default because the endpoint can be operationally flaky in scheduled runs
 
 ### Official publisher RSS feeds
 
@@ -36,6 +37,7 @@ This is the current recommended source mix for the first implementation phase. I
 - Notes:
   - RSS lets the user keep a curated source list
   - adapter is generic, so additional feeds can be added through config
+  - for dependable daily operation, prefer direct publisher feeds first and add GDELT only as a secondary discovery source
 
 ## Structured world data
 
@@ -98,4 +100,3 @@ This is the current recommended source mix for the first implementation phase. I
 - User setup:
   1. Create an OpenAI API key.
   2. Put it in `.env` as `OPENAI_API_KEY=...`
-
