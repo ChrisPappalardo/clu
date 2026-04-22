@@ -74,6 +74,15 @@ SOURCE_QUALITY_HINTS = {
     "fred": 0.18,
 }
 
+CONTENT_TYPE_ADJUSTMENTS = {
+    "hard_news": 0.22,
+    "mixed": 0.05,
+    "analysis": -0.05,
+    "explainer": -0.12,
+    "feature": -0.22,
+    "opinion": -0.35,
+}
+
 
 def _tokenize(text: str) -> list[str]:
     tokens = re.findall(r"[a-z0-9]+", text.lower())
@@ -111,7 +120,14 @@ def _importance_score(item: SnapshotItem, generated_at: datetime) -> float:
         significance_bonus = min(0.5, 0.18 * significance_hits)
     source_bonus = _source_quality_bonus(item.source_name, item.source_id)
     length_bonus = 0.08 if len(combined_tokens) >= 6 else 0.0
-    return round(0.45 + recency_bonus + significance_bonus + source_bonus + length_bonus, 3)
+    content_type = str(item.raw.get("content_type", "")).lower()
+    content_bonus = CONTENT_TYPE_ADJUSTMENTS.get(content_type, 0.0)
+    significance_hint = str(item.raw.get("significance_hint", "")).lower()
+    if significance_hint == "high":
+        significance_bonus += 0.12
+    elif significance_hint == "low":
+        significance_bonus -= 0.08
+    return round(0.45 + recency_bonus + significance_bonus + source_bonus + length_bonus + content_bonus, 3)
 
 
 def _build_previous_cluster_lookup(history: list[DailySnapshot]) -> dict[str, StoryCluster]:
@@ -155,7 +171,7 @@ def _continuity_matches(
         similarity = _jaccard_similarity(cluster_tokens, _cluster_token_signature(prev_cluster))
         if _cluster_signature(prev_cluster.id) == cluster_key:
             similarity = max(similarity, 0.95)
-        if similarity >= 0.3:
+        if similarity >= 0.24:
             matches.append((prev_id, similarity))
     matches.sort(key=lambda row: row[1], reverse=True)
     return [match_id for match_id, _ in matches[:3]]
@@ -169,7 +185,10 @@ def _assign_cluster_keys(items: list[SnapshotItem]) -> dict[str, list[SnapshotIt
         best_similarity = 0.0
         for group in groups:
             similarity = _jaccard_similarity(tokens, group["tokens"])
-            if similarity > best_similarity and similarity >= 0.34:
+            hint_overlap = bool(set(item.raw.get("same_story_hints", [])) & set(group["titles"]))
+            if hint_overlap:
+                similarity = max(similarity, 0.45)
+            if similarity > best_similarity and similarity >= 0.26:
                 matched_group = group
                 best_similarity = similarity
         if matched_group is None:
@@ -178,12 +197,14 @@ def _assign_cluster_keys(items: list[SnapshotItem]) -> dict[str, list[SnapshotIt
                 "key": cluster_key,
                 "tokens": set(tokens),
                 "items": [item],
+                "titles": {item.title},
             }
             groups.append(new_group)
             item.cluster_key = cluster_key
         else:
             matched_group["tokens"].update(tokens)
             matched_group["items"].append(item)
+            matched_group["titles"].add(item.title)
             item.cluster_key = matched_group["key"]
 
     return {group["key"]: group["items"] for group in groups}
@@ -204,6 +225,25 @@ def _cluster_support_penalty(source_count: int, cluster_tokens: set[str]) -> flo
     if {"war", "attack", "earthquake", "storm", "sanction", "ceasefire"} & cluster_tokens:
         return 0.0
     return 0.28
+
+
+def _select_diverse_clusters(clusters: list[StoryCluster], limit: int) -> list[StoryCluster]:
+    selected: list[StoryCluster] = []
+    for candidate in clusters:
+        candidate_tokens = _cluster_token_signature(candidate)
+        if any(_jaccard_similarity(candidate_tokens, _cluster_token_signature(existing)) >= 0.3 for existing in selected):
+            continue
+        selected.append(candidate)
+        if len(selected) >= limit:
+            break
+    if len(selected) < limit:
+        for candidate in clusters:
+            if candidate in selected:
+                continue
+            selected.append(candidate)
+            if len(selected) >= limit:
+                break
+    return selected
 
 
 def build_sections_and_clusters(
@@ -314,7 +354,7 @@ def build_sections_and_clusters(
         items.sort(key=lambda item: (item.importance_score, item.novelty_score, item.published_at or generated_at), reverse=True)
         metrics = metrics[: config.briefing.max_headlines_per_section]
         top_items = items[: config.briefing.max_headlines_per_section]
-        top_clusters = section_clusters[: config.briefing.max_headlines_per_section]
+        top_clusters = _select_diverse_clusters(section_clusters, config.briefing.max_headlines_per_section)
 
         summary_parts = []
         if top_clusters:

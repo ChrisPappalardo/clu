@@ -43,7 +43,6 @@ class AISectionInterpretation(BaseModel):
 class AIInterpretationPass(BaseModel):
     cluster_updates: list[AIClusterInterpretation] = Field(default_factory=list)
     section_updates: list[AISectionInterpretation] = Field(default_factory=list)
-    generation_notes: list[str] = Field(default_factory=list)
 
 
 class AIGlobalBrief(BaseModel):
@@ -54,13 +53,14 @@ class AIGlobalBrief(BaseModel):
     themes: list[str] = Field(default_factory=list)
     top_story_ids: list[str] = Field(default_factory=list)
     watch_items: list[WatchItem] = Field(default_factory=list)
-    generation_notes: list[str] = Field(default_factory=list)
 
 
 T = TypeVar("T", bound=BaseModel)
 META_PHRASES = (
     "would generally",
     "here is an example",
+    "here are the key points",
+    "the key points are",
     "based on the information provided",
     "based on the dataset",
     "the lead summary",
@@ -75,6 +75,41 @@ def _preferred_top_clusters(clusters: list[StoryCluster]) -> list[StoryCluster]:
         if len(cluster.source_ids) >= 2 or cluster.significance == "high" or cluster.risk_level == "high"
     ]
     return robust or clusters
+
+
+def _cluster_text_tokens(cluster: StoryCluster) -> set[str]:
+    text = " ".join([cluster.title, cluster.summary, cluster.what_changed or "", cluster.why_now or ""])
+    return {token for token in text.lower().split() if token}
+
+
+def _cluster_similarity(left: StoryCluster, right: StoryCluster) -> float:
+    left_tokens = _cluster_text_tokens(left)
+    right_tokens = _cluster_text_tokens(right)
+    if not left_tokens or not right_tokens:
+        return 0.0
+    union = left_tokens | right_tokens
+    return len(left_tokens & right_tokens) / len(union)
+
+
+def _select_diverse_top_story_ids(candidate_ids: list[str], cluster_lookup: dict[str, StoryCluster], limit: int = 5) -> list[str]:
+    selected: list[str] = []
+    for cluster_id in candidate_ids:
+        candidate = cluster_lookup.get(cluster_id)
+        if candidate is None:
+            continue
+        if any(_cluster_similarity(candidate, cluster_lookup[selected_id]) >= 0.28 for selected_id in selected):
+            continue
+        selected.append(cluster_id)
+        if len(selected) >= limit:
+            break
+    if len(selected) < limit:
+        for cluster_id in candidate_ids:
+            if cluster_id in selected or cluster_id not in cluster_lookup:
+                continue
+            selected.append(cluster_id)
+            if len(selected) >= limit:
+                break
+    return selected
 
 
 def _build_client(ai_config: AIConfig) -> OpenAI:
@@ -291,7 +326,8 @@ def _run_interpretation_pass(
             "You are an analyst producing structured morning-briefing interpretations. "
             "For each cluster and section, explain what changed, why it matters now, and the main risk. "
             "Be neutral, concise, and avoid speculation beyond the provided evidence. "
-            "Do not overstate thin single-source stories unless they are clearly high-significance."
+            "Do not overstate thin single-source stories unless they are clearly high-significance. "
+            "Do not treat feature pieces, soft profiles, or commentary as top hard-news developments."
         ),
         user_prompt=(
             "Interpret the current ranked clusters and sections in light of the recent snapshot history. "
@@ -317,7 +353,9 @@ def _run_global_brief_pass(
             "Summarize what changed since the prior briefing, identify the biggest risks, and tell the reader what to watch next. "
             "Do not invent facts. Prefer clusters with broader source support or clearly high significance when selecting top stories. "
             "Avoid repeating the same point across lead summary, themes, and watch items. "
-            "Write direct declarative prose only. Do not mention prompts, datasets, examples, or how the summary was produced."
+            "Write direct declarative prose only. Do not mention prompts, datasets, examples, or how the summary was produced. "
+            "Do not elevate commentary, opinion, or feature-style stories unless they clearly dominate the hard-news agenda. "
+            "Do not open with generic framing like 'Here are the key points' or similar list-introductions."
         ),
         user_prompt=(
             "Using the enriched snapshot below, produce the final top-level morning briefing. "
@@ -391,8 +429,7 @@ def synthesize_snapshot(
                     note
                     for note in base_snapshot.generation_notes
                     if note != "Generated with heuristic fallback briefing."
-                ]
-                + interpretation.generation_notes,
+                ],
             }
         )
 
@@ -400,8 +437,10 @@ def synthesize_snapshot(
         if _contains_meta_language(global_brief.lead_summary) or _contains_meta_language(global_brief.what_changed_summary):
             raise ValueError("AI global brief contained meta/template language.")
         top_story_ids = [story_id for story_id in global_brief.top_story_ids if story_id in cluster_lookup]
+        top_story_ids = _select_diverse_top_story_ids(top_story_ids, cluster_lookup)
         if not top_story_ids:
-            top_story_ids = [cluster.id for cluster in _preferred_top_clusters(enriched_snapshot.clusters)[:5]]
+            preferred_ids = [cluster.id for cluster in _preferred_top_clusters(enriched_snapshot.clusters)]
+            top_story_ids = _select_diverse_top_story_ids(preferred_ids, cluster_lookup)
 
         return enriched_snapshot.model_copy(
             update={
@@ -412,7 +451,7 @@ def synthesize_snapshot(
                 "themes": global_brief.themes or enriched_snapshot.themes,
                 "top_story_ids": top_story_ids,
                 "watch_items": global_brief.watch_items or enriched_snapshot.watch_items,
-                "generation_notes": enriched_snapshot.generation_notes + global_brief.generation_notes,
+                "generation_notes": enriched_snapshot.generation_notes,
             }
         )
     except (APIConnectionError, APIError, ValidationError, ValueError, json.JSONDecodeError) as exc:

@@ -10,6 +10,7 @@ from clu_core.models import CollectedSourceData, SourceAttribution
 from clu_core.rendering import render_snapshot_html
 
 from .briefing_engine import build_sections_and_clusters
+from .enrichment import enrich_collected_data
 from .source_registry import build_connector
 from .storage import load_recent_snapshots, write_snapshot_index
 from .summarizer import build_snapshot_payload, synthesize_snapshot
@@ -49,12 +50,14 @@ def main() -> None:
             )
             print(f"Source {source.id} failed: {exc}")
 
+    collected, enrichment_notes = enrich_collected_data(config, collected)
     sections, clusters, memory, attributions, notes = build_sections_and_clusters(
         config,
         collected,
         generated_at,
         history,
     )
+    notes.extend(enrichment_notes)
     base_snapshot = build_snapshot_payload(
         config=config,
         generated_at=generated_at,

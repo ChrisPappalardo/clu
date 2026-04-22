@@ -46,6 +46,7 @@ class BriefingConfig(BaseModel):
 class AIConfig(BaseModel):
     provider: str = "openai"
     model: str = "gpt-5-mini"
+    fast_model: str | None = None
     enabled: bool = True
     max_input_items_per_section: int = 12
     history_window_days: int = 7

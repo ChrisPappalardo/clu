@@ -39,6 +39,7 @@ briefing:
 
 ai:
   provider: ollama
+  fast_model: ${OLLAMA_FAST_MODEL}
   model: ${OLLAMA_MODEL}
   enabled: true
   base_url: ${OLLAMA_BASE_URL}
@@ -60,6 +61,12 @@ sources:
         - /opinion/
       exclude_title_patterns:
         - " | "
+        - "^How\\s"
+        - "^Why\\s"
+        - "^Opinion\\b"
+        - "^Analysis\\b"
+        - "revealed the true cost"
+        - "taught us to"
 
   - id: gdelt-world
     type: gdelt
@@ -92,7 +99,11 @@ sources:
     display_name: BBC World
     params:
       feed_url: http://feeds.bbci.co.uk/news/world/rss.xml
-      max_items: 10
+      max_items: 8
+      exclude_title_patterns:
+        - "^How\\s"
+        - "^Why\\s"
+        - "^The world explained"
 
   - id: dw-world-rss
     type: rss
@@ -101,7 +112,10 @@ sources:
     display_name: DW World
     params:
       feed_url: https://rss.dw.com/rdf/rss-en-world
-      max_items: 10
+      max_items: 8
+      exclude_title_patterns:
+        - "^How\\s"
+        - "^Why\\s"
 
   - id: fred-macro
     type: fred

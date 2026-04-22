@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -9,13 +10,19 @@ import yaml
 from .models import AppConfig
 
 
+UNRESOLVED_ENV_PATTERN = re.compile(r"\$\{[^}]+\}")
+
+
 def _expand_env_values(value: Any) -> Any:
     if isinstance(value, dict):
         return {key: _expand_env_values(inner) for key, inner in value.items()}
     if isinstance(value, list):
         return [_expand_env_values(item) for item in value]
     if isinstance(value, str):
-        return os.path.expandvars(value)
+        expanded = os.path.expandvars(value)
+        if UNRESOLVED_ENV_PATTERN.search(expanded):
+            return ""
+        return expanded
     return value
 
 

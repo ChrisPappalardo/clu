@@ -21,7 +21,7 @@ The system has one canonical briefing schema. Every output path uses the same st
 
 1. Source adapters fetch raw data from APIs or RSS feeds.
 2. Adapters normalize raw responses into a common `CollectedSourceData` shape.
-3. The ingest pipeline clusters related items, weights source quality, matches continuity against prior snapshots, and merges the result into a `DailySnapshot`.
+3. The ingest pipeline enriches items with a fast local model, clusters related items, weights source quality, matches continuity against prior snapshots, and merges the result into a `DailySnapshot`.
 4. AI produces the lead summary, section summaries, themes, interpretation, and watchlist.
 5. The pipeline writes:
    - `latest_snapshot.json`
