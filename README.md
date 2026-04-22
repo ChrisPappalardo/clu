@@ -10,6 +10,7 @@ This repository now contains the initial project scaffold:
 - a Python ingest service with configurable source adapters
 - a Python FastAPI service serving the latest snapshot and HTML report
 - a React dashboard wired to the canonical snapshot schema
+- clustered story ranking, briefing memory, and AI-generated narratives
 - Docker Compose for local orchestration
 - setup docs for source selection and API keys
 
@@ -39,6 +40,7 @@ docker compose run --rm ingest
 
 6. Open:
    - API: `http://localhost:8000/api/v1/snapshot/latest`
+   - Snapshot index: `http://localhost:8000/api/v1/snapshots`
    - Dashboard: `http://localhost:5173`
 
 ## Cron
@@ -54,6 +56,6 @@ Create the `logs/` directory before enabling the job.
 ## Notes
 
 - The ingest path writes briefing artifacts under `data/output/`.
+- The ingest path also writes `snapshot_index.json` so the API and UI can inspect prior briefings.
 - If `OPENAI_API_KEY` is not set, the ingest service falls back to heuristic summaries so the pipeline can still run.
-- The current scaffold uses file-based report persistence. The shared schema is designed so a database-backed implementation can be added without changing the API or dashboard contract.
-
+- The current scaffold uses file-based report persistence with briefing history. The shared schema is designed so a database-backed implementation can be added without changing the API or dashboard contract.

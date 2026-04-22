@@ -51,6 +51,12 @@ a {
   line-height: 1.6;
 }
 
+.outlook {
+  max-width: 760px;
+  color: #33352f;
+  line-height: 1.55;
+}
+
 .themeRow {
   display: flex;
   flex-wrap: wrap;
@@ -63,6 +69,24 @@ a {
   border-radius: 999px;
   background: #d9c9a4;
   font-size: 0.95rem;
+}
+
+.overviewGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+  margin-top: 24px;
+}
+
+.panel {
+  padding: 22px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(85, 74, 49, 0.12);
+}
+
+.panel h2 {
+  margin-top: 0;
 }
 
 .grid {
@@ -92,9 +116,49 @@ a {
   line-height: 1.5;
 }
 
+.narrative {
+  margin-top: 10px;
+  color: #2f322f;
+  font-style: italic;
+}
+
 .stack {
   display: grid;
   gap: 12px;
+}
+
+.storyCard {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 16px;
+  background: #f6f0e1;
+}
+
+.scoreRow,
+.miniList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.scoreRow span,
+.subtle {
+  color: #5f635b;
+}
+
+.miniList div {
+  display: grid;
+  gap: 2px;
+  min-width: 72px;
+}
+
+.watchItem {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #ece6d6;
 }
 
 .item {
@@ -136,4 +200,3 @@ a {
     padding: 20px;
   }
 }
-

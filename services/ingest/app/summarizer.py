@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-from collections import defaultdict
 from datetime import datetime
 
 from openai import OpenAI
@@ -10,148 +9,210 @@ from pydantic import BaseModel, Field
 
 from clu_core.models import (
     AppConfig,
-    CollectedSourceData,
     DailySnapshot,
     SnapshotSection,
+    StoryCluster,
+    WatchItem,
 )
 
 
-class AISectionSummary(BaseModel):
+class AIClusterUpdate(BaseModel):
+    cluster_id: str
+    summary: str
+    why_it_matters: str
+    watch_points: list[str] = Field(default_factory=list)
+
+
+class AISectionUpdate(BaseModel):
     section_id: str
     summary: str
+    narrative: str
 
 
 class AIBrief(BaseModel):
     lead_summary: str
+    outlook: str
     themes: list[str] = Field(default_factory=list)
-    section_summaries: list[AISectionSummary] = Field(default_factory=list)
+    top_story_ids: list[str] = Field(default_factory=list)
+    watch_items: list[WatchItem] = Field(default_factory=list)
+    cluster_updates: list[AIClusterUpdate] = Field(default_factory=list)
+    section_updates: list[AISectionUpdate] = Field(default_factory=list)
     generation_notes: list[str] = Field(default_factory=list)
 
 
-def _heuristic_brief(
+def build_snapshot_payload(
     config: AppConfig,
-    collected: list[CollectedSourceData],
     generated_at: datetime,
+    sections: list[SnapshotSection],
+    clusters: list[StoryCluster],
+    source_attributions,
+    notes: list[str],
+    memory,
 ) -> DailySnapshot:
-    section_map: dict[str, dict] = defaultdict(lambda: {"items": [], "metrics": []})
-    attributions = []
-    notes: list[str] = []
-    for payload in collected:
-        attributions.append(payload.source)
-        notes.extend(payload.notes)
-        section_map[payload.section]["items"].extend(payload.items)
-        section_map[payload.section]["metrics"].extend(payload.metrics)
-
-    sections: list[SnapshotSection] = []
-    for section_id, content in section_map.items():
-        items = sorted(
-            content["items"],
-            key=lambda item: item.published_at or generated_at,
-            reverse=True,
-        )[: config.briefing.max_headlines_per_section]
-        metrics = content["metrics"][: config.briefing.max_headlines_per_section]
-        summary_parts = []
-        if items:
-            summary_parts.append(f"{len(items)} notable items collected.")
-        if metrics:
-            summary_parts.append(f"{len(metrics)} structured signals updated.")
-        sections.append(
-            SnapshotSection(
-                id=section_id,
-                title=section_id.replace("-", " ").title(),
-                kind="mixed" if items and metrics else ("news" if items else "data"),
-                summary=" ".join(summary_parts) or "No significant updates collected.",
-                items=items,
-                metrics=metrics,
-            )
-        )
-
-    sections = sections[: config.briefing.max_sections]
     return DailySnapshot(
         snapshot_id=generated_at.strftime("%Y%m%d"),
         snapshot_date=generated_at.date().isoformat(),
         generated_at=generated_at,
         timezone=config.user.timezone,
-        lead_summary="Today's briefing is available. AI synthesis was not used, so section summaries are heuristic.",
-        themes=[section.title for section in sections[:3]],
+        lead_summary="Today's briefing is available. AI synthesis was not used, so story ranking and narratives are heuristic.",
+        outlook="Watch the top-ranked stories for confirmation, official responses, and follow-on market or policy effects.",
+        themes=[cluster.title for cluster in clusters[:3]],
+        top_story_ids=[cluster.id for cluster in clusters[:5]],
+        watch_items=[
+            WatchItem(
+                label=cluster.title,
+                note="Monitor for fresh facts, official statements, and downstream consequences.",
+                section_id=cluster.section,
+            )
+            for cluster in clusters[:3]
+        ],
         sections=sections,
-        source_attributions=attributions,
-        generation_notes=notes + ["Generated with heuristic fallback summarization."],
+        clusters=clusters,
+        memory=memory,
+        source_attributions=source_attributions,
+        generation_notes=notes + ["Generated with heuristic fallback briefing."],
     )
 
 
 def synthesize_snapshot(
     config: AppConfig,
-    collected: list[CollectedSourceData],
-    generated_at: datetime,
+    base_snapshot: DailySnapshot,
+    history: list[DailySnapshot],
 ) -> DailySnapshot:
     api_key = os.getenv("OPENAI_API_KEY")
     if not config.ai.enabled or not api_key:
-        return _heuristic_brief(config, collected, generated_at)
+        return base_snapshot
 
-    heuristic = _heuristic_brief(config, collected, generated_at)
     client = OpenAI(api_key=api_key)
-    source_payload = [
-        {
-            "source_id": payload.source.source_id,
-            "display_name": payload.source.display_name,
-            "section": payload.section,
-            "notes": payload.notes,
-            "items": [
+    source_payload = {
+        "preferences": config.briefing.model_dump(),
+        "history_summary": [
+            {
+                "snapshot_id": snapshot.snapshot_id,
+                "snapshot_date": snapshot.snapshot_date,
+                "lead_summary": snapshot.lead_summary,
+                "themes": snapshot.themes,
+                "top_clusters": [
+                    {
+                        "id": cluster.id,
+                        "title": cluster.title,
+                        "summary": cluster.summary,
+                        "why_it_matters": cluster.why_it_matters,
+                    }
+                    for cluster in snapshot.clusters[:5]
+                ],
+            }
+            for snapshot in history[-config.ai.history_window_days :]
+        ],
+        "current_snapshot": {
+            "snapshot_date": base_snapshot.snapshot_date,
+            "memory": base_snapshot.memory.model_dump(mode="json"),
+            "clusters": [
                 {
-                    "title": item.title,
-                    "summary": item.summary,
-                    "source_name": item.source_name,
-                    "published_at": item.published_at.isoformat() if item.published_at else None,
+                    "id": cluster.id,
+                    "section": cluster.section,
+                    "title": cluster.title,
+                    "summary": cluster.summary,
+                    "importance_score": cluster.importance_score,
+                    "novelty_score": cluster.novelty_score,
+                    "significance": cluster.significance,
+                    "source_names": cluster.source_names,
+                    "developments": cluster.developments,
+                    "related_previous_cluster_ids": cluster.related_previous_cluster_ids,
                 }
-                for item in payload.items[:10]
+                for cluster in base_snapshot.clusters[:15]
             ],
-            "metrics": [
+            "sections": [
                 {
-                    "label": metric.label,
-                    "value": metric.value,
-                    "change": metric.change,
-                    "context": metric.context,
+                    "id": section.id,
+                    "title": section.title,
+                    "summary": section.summary,
+                    "top_cluster_ids": [cluster.id for cluster in section.clusters[:5]],
+                    "metrics": [
+                        {
+                            "label": metric.label,
+                            "value": metric.value,
+                            "change": metric.change,
+                            "context": metric.context,
+                        }
+                        for metric in section.metrics[:8]
+                    ],
                 }
-                for metric in payload.metrics[:10]
+                for section in base_snapshot.sections
             ],
-        }
-        for payload in collected
-    ]
+        },
+    }
+
     response = client.responses.parse(
         model=config.ai.model,
         input=[
             {
                 "role": "system",
                 "content": (
-                    "You create a concise but high-leverage daily world briefing. "
-                    "Keep the tone neutral, synthesize cross-source patterns, and do not invent facts."
+                    "You create a neutral, high-leverage daily world briefing. "
+                    "Prioritize what changed, what matters most, and what to watch next. "
+                    "Use prior snapshot context when present. Do not invent facts."
                 ),
             },
             {
                 "role": "user",
                 "content": (
-                    "Using the collected signal below, produce a briefing lead, 3 to 6 themes, and one short summary per section. "
-                    f"User preferences: {json.dumps(config.briefing.model_dump(), default=str)}. "
-                    f"Collected sources: {json.dumps(source_payload, default=str)}"
+                    "Given the current ranked story clusters, section metrics, and prior briefing history, "
+                    "produce a structured morning briefing. "
+                    f"Payload: {json.dumps(source_payload, default=str)}"
                 ),
             },
         ],
         text_format=AIBrief,
     )
     brief = response.output_parsed
-    section_summaries = {row.section_id: row.summary for row in brief.section_summaries}
 
-    sections = [
-        section.model_copy(update={"summary": section_summaries.get(section.id, section.summary)})
-        for section in heuristic.sections
-    ]
-    return heuristic.model_copy(
+    cluster_updates = {row.cluster_id: row for row in brief.cluster_updates}
+    section_updates = {row.section_id: row for row in brief.section_updates}
+
+    updated_clusters = []
+    for cluster in base_snapshot.clusters:
+        update = cluster_updates.get(cluster.id)
+        if update is None:
+            updated_clusters.append(cluster)
+            continue
+        updated_clusters.append(
+            cluster.model_copy(
+                update={
+                    "summary": update.summary,
+                    "why_it_matters": update.why_it_matters,
+                    "watch_points": update.watch_points or cluster.watch_points,
+                }
+            )
+        )
+    cluster_lookup = {cluster.id: cluster for cluster in updated_clusters}
+
+    updated_sections = []
+    for section in base_snapshot.sections:
+        update = section_updates.get(section.id)
+        updated_sections.append(
+            section.model_copy(
+                update={
+                    "summary": update.summary if update else section.summary,
+                    "narrative": update.narrative if update else section.narrative,
+                    "clusters": [cluster_lookup[cluster.id] for cluster in section.clusters if cluster.id in cluster_lookup],
+                }
+            )
+        )
+
+    top_story_ids = [story_id for story_id in brief.top_story_ids if story_id in cluster_lookup]
+    if not top_story_ids:
+        top_story_ids = base_snapshot.top_story_ids
+
+    return base_snapshot.model_copy(
         update={
             "lead_summary": brief.lead_summary,
-            "themes": brief.themes or heuristic.themes,
-            "sections": sections,
-            "generation_notes": heuristic.generation_notes + brief.generation_notes,
+            "outlook": brief.outlook,
+            "themes": brief.themes or base_snapshot.themes,
+            "top_story_ids": top_story_ids,
+            "watch_items": brief.watch_items or base_snapshot.watch_items,
+            "sections": updated_sections,
+            "clusters": updated_clusters,
+            "generation_notes": base_snapshot.generation_notes + brief.generation_notes,
         }
     )
-

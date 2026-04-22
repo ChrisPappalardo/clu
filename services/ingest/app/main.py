@@ -9,8 +9,10 @@ from clu_core.config import load_config
 from clu_core.models import CollectedSourceData, SourceAttribution
 from clu_core.rendering import render_snapshot_html
 
+from .briefing_engine import build_sections_and_clusters
 from .source_registry import build_connector
-from .summarizer import synthesize_snapshot
+from .storage import load_recent_snapshots, write_snapshot_index
+from .summarizer import build_snapshot_payload, synthesize_snapshot
 
 
 def main() -> None:
@@ -23,6 +25,7 @@ def main() -> None:
 
     config = load_config(config_file)
     generated_at = datetime.now().astimezone()
+    history = load_recent_snapshots(output_dir, config.ai.history_window_days)
     collected = []
     for source in config.sources:
         if not source.enabled:
@@ -46,7 +49,22 @@ def main() -> None:
             )
             print(f"Source {source.id} failed: {exc}")
 
-    snapshot = synthesize_snapshot(config, collected, generated_at)
+    sections, clusters, memory, attributions, notes = build_sections_and_clusters(
+        config,
+        collected,
+        generated_at,
+        history,
+    )
+    base_snapshot = build_snapshot_payload(
+        config=config,
+        generated_at=generated_at,
+        sections=sections,
+        clusters=clusters,
+        source_attributions=attributions,
+        notes=notes,
+        memory=memory,
+    )
+    snapshot = synthesize_snapshot(config, base_snapshot, history)
     snapshot_json = json.dumps(snapshot.model_dump(mode="json"), indent=2)
     snapshot_html = render_snapshot_html(snapshot)
 
@@ -59,6 +77,7 @@ def main() -> None:
     latest_html.write_text(snapshot_html, encoding="utf-8")
     dated_json.write_text(snapshot_json, encoding="utf-8")
     dated_html.write_text(snapshot_html, encoding="utf-8")
+    write_snapshot_index(output_dir, history + [snapshot])
 
     print(f"Wrote {latest_json}")
     print(f"Wrote {latest_html}")

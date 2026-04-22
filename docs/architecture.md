@@ -22,10 +22,11 @@ The system has one canonical briefing schema. Every output path uses the same st
 1. Source adapters fetch raw data from APIs or RSS feeds.
 2. Adapters normalize raw responses into a common `CollectedSourceData` shape.
 3. The ingest pipeline merges these payloads into a `DailySnapshot`.
-4. AI produces the lead summary, section summaries, themes, and interpretation.
+4. AI produces the lead summary, section summaries, themes, interpretation, and watchlist.
 5. The pipeline writes:
    - `latest_snapshot.json`
    - `latest_snapshot.html`
+   - `snapshot_index.json`
    - date-stamped artifact copies
 6. The API serves the latest stored artifacts.
 7. The React app fetches the snapshot from the API.
@@ -36,12 +37,18 @@ The top-level report object is `DailySnapshot`. It contains:
 
 - briefing metadata: `snapshot_id`, `snapshot_date`, `generated_at`, `timezone`
 - one `lead_summary`
+- one `outlook`
 - high-level `themes`
+- ranked `top_story_ids`
+- `watch_items[]`
 - `sections[]`, each with:
   - `id`, `title`, `kind`
   - section summary
+  - section narrative
   - `items[]` for news or event content
   - `metrics[]` for structured data signals
+- `clusters[]` for ranked story-level briefings
+- `memory` describing continuity from prior snapshots
 - `source_attributions[]`
 - `generation_notes[]`
 
@@ -49,6 +56,7 @@ This separation matters:
 
 - `items` model narrative/editorial material
 - `metrics` model numeric structured signals
+- `clusters` model merged story developments across sources and days
 - section summaries can synthesize both
 
 That makes the schema safe for:
@@ -69,4 +77,3 @@ Initial personalization is file-based:
 - enabled sources and their parameters
 
 The application should eventually expose a config editor UI, but the underlying source of truth remains a single-user config document.
-

@@ -47,6 +47,8 @@ class AIConfig(BaseModel):
     provider: str = "openai"
     model: str = "gpt-5-mini"
     enabled: bool = True
+    max_input_items_per_section: int = 12
+    history_window_days: int = 7
 
 
 class SourceConfig(BaseModel):
@@ -85,6 +87,9 @@ class SnapshotItem(BaseModel):
     source_name: str
     geography: list[str] = Field(default_factory=list)
     topics: list[str] = Field(default_factory=list)
+    importance_score: float = 0.0
+    novelty_score: float = 0.0
+    cluster_key: str | None = None
     raw: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -101,6 +106,25 @@ class SnapshotMetric(BaseModel):
     raw: dict[str, Any] = Field(default_factory=dict)
 
 
+class StoryCluster(BaseModel):
+    id: str
+    section: str
+    title: str
+    summary: str
+    why_it_matters: str
+    importance_score: float
+    novelty_score: float
+    significance: Literal["high", "medium", "low"]
+    item_ids: list[str] = Field(default_factory=list)
+    source_ids: list[str] = Field(default_factory=list)
+    source_names: list[str] = Field(default_factory=list)
+    geography: list[str] = Field(default_factory=list)
+    topics: list[str] = Field(default_factory=list)
+    watch_points: list[str] = Field(default_factory=list)
+    developments: list[str] = Field(default_factory=list)
+    related_previous_cluster_ids: list[str] = Field(default_factory=list)
+
+
 class CollectedSourceData(BaseModel):
     source: SourceAttribution
     section: str
@@ -114,8 +138,25 @@ class SnapshotSection(BaseModel):
     title: str
     kind: Literal["news", "data", "mixed"]
     summary: str
+    narrative: str | None = None
     items: list[SnapshotItem] = Field(default_factory=list)
     metrics: list[SnapshotMetric] = Field(default_factory=list)
+    clusters: list[StoryCluster] = Field(default_factory=list)
+
+
+class WatchItem(BaseModel):
+    label: str
+    note: str
+    section_id: str | None = None
+
+
+class BriefingMemory(BaseModel):
+    prior_snapshot_id: str | None = None
+    prior_snapshot_date: str | None = None
+    continuing_cluster_ids: list[str] = Field(default_factory=list)
+    newly_emerged_cluster_ids: list[str] = Field(default_factory=list)
+    dropped_cluster_ids: list[str] = Field(default_factory=list)
+    continuity_note: str | None = None
 
 
 class DailySnapshot(BaseModel):
@@ -124,8 +165,12 @@ class DailySnapshot(BaseModel):
     generated_at: datetime
     timezone: str
     lead_summary: str
+    outlook: str | None = None
     themes: list[str] = Field(default_factory=list)
+    top_story_ids: list[str] = Field(default_factory=list)
+    watch_items: list[WatchItem] = Field(default_factory=list)
     sections: list[SnapshotSection] = Field(default_factory=list)
+    clusters: list[StoryCluster] = Field(default_factory=list)
+    memory: BriefingMemory = Field(default_factory=BriefingMemory)
     source_attributions: list[SourceAttribution] = Field(default_factory=list)
     generation_notes: list[str] = Field(default_factory=list)
-
