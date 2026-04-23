@@ -35,7 +35,9 @@ This is the current recommended source mix for the first implementation phase. I
 - Example feeds:
   - NPR World: https://feeds.npr.org/1004/rss.xml
   - BBC World: http://feeds.bbci.co.uk/news/world/rss.xml
+  - BBC Business: http://feeds.bbci.co.uk/news/business/rss.xml
   - DW World: https://rss.dw.com/rdf/rss-en-world
+  - PBS NewsHour headlines, filtered to world coverage: https://www.pbs.org/newshour/feeds/rss/headlines
 - Notes:
   - RSS lets the user keep a curated source list
   - adapter is generic, so additional feeds can be added through config
@@ -51,6 +53,9 @@ This is the current recommended source mix for the first implementation phase. I
 - Docs:
   - https://fred.stlouisfed.org/docs/api/fred/overview.html
   - https://fred.stlouisfed.org/docs/api/api_key.html
+- Suggested default series for world-pulse briefing:
+  - Macro: CPI, core CPI, unemployment, payrolls, retail sales, industrial production, housing starts, Fed funds
+  - Markets: 2Y/10Y Treasury, 2s10s spread, Brent crude, broad dollar index, VIX, high-yield spread, S&P 500, Nasdaq Composite
 - User setup:
   1. Create a FRED account.
   2. Generate an API key.

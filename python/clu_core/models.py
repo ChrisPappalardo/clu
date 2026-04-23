@@ -101,8 +101,11 @@ class SnapshotMetric(BaseModel):
     label: str
     value: str
     unit: str | None = None
+    previous_value: str | None = None
     change: str | None = None
+    change_percent: str | None = None
     trend: Literal["up", "down", "flat", "mixed"] | None = None
+    freshness: str | None = None
     source_id: str
     section: str
     context: str | None = None

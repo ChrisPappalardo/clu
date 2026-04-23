@@ -18,11 +18,10 @@ class ItemEnrichment(BaseModel):
     significance: str
     topics: list[str] = Field(default_factory=list)
     geography: list[str] = Field(default_factory=list)
-    same_story_hints: list[str] = Field(default_factory=list)
     confidence: float = 0.0
 
 
-class BatchEnrichment(BaseModel):
+class EnrichmentChunk(BaseModel):
     items: list[ItemEnrichment] = Field(default_factory=list)
 
 
@@ -71,6 +70,10 @@ def _structured_completion(
     return model_class.model_validate_json(content)
 
 
+def _chunked(items: list[SnapshotItem], size: int) -> list[list[SnapshotItem]]:
+    return [items[index : index + size] for index in range(0, len(items), size)]
+
+
 def enrich_collected_data(config: AppConfig, collected: list[CollectedSourceData]) -> tuple[list[CollectedSourceData], list[str]]:
     fast_model = config.ai.fast_model
     if not config.ai.enabled or not fast_model:
@@ -82,40 +85,42 @@ def enrich_collected_data(config: AppConfig, collected: list[CollectedSourceData
         item
         for payload in collected
         for item in payload.items
-    ][:40]
+    ][:48]
     if not batch_items:
         return collected, notes
 
-    prompt_items = [
-        {
-            "item_id": item.id,
-            "title": item.title,
-            "summary": item.summary,
-            "source_name": item.source_name,
-            "section": item.section,
-        }
-        for item in batch_items
-    ]
-
+    enrichment_by_id: dict[str, ItemEnrichment] = {}
     try:
-        enrichment = _structured_completion(
-            client,
-            model=fast_model,
-            system_prompt=(
-                "You are a lightweight news classifier. "
-                "For each item, classify whether it is hard_news, feature, opinion, analysis, explainer, or mixed. "
-                "Estimate significance as high, medium, or low. "
-                "Add compact topic and geography tags. "
-                "Only include same_story_hints when there is a strong chance that another title in the batch refers to the same underlying event."
-            ),
-            user_prompt=(
-                "Classify the following candidate briefing items for routing, clustering, and ranking. "
-                "Keep outputs concise and structured. "
-                f"Items: {json.dumps(prompt_items, default=str)}"
-            ),
-            model_class=BatchEnrichment,
-        )
-        enrichment_by_id = {item.item_id: item for item in enrichment.items}
+        for chunk in _chunked(batch_items, 8):
+            prompt_items = [
+                {
+                    "item_id": item.id,
+                    "title": item.title,
+                    "summary": item.summary,
+                    "source_name": item.source_name,
+                    "section": item.section,
+                }
+                for item in chunk
+            ]
+            enrichment = _structured_completion(
+                client,
+                model=fast_model,
+                system_prompt=(
+                    "You are a lightweight news classifier for a morning briefing system. "
+                    "For each item, classify content_type as one of: hard_news, analysis, explainer, feature, opinion, mixed. "
+                    "Estimate significance as high, medium, or low. "
+                    "Add up to 3 concise topic tags and up to 2 concise geography tags. "
+                    "Be conservative: feature or opinion is better than falsely calling something hard_news."
+                ),
+                user_prompt=(
+                    "Classify these briefing candidates for ranking and filtering. "
+                    "Return one result per item_id. "
+                    f"Items: {json.dumps(prompt_items, default=str)}"
+                ),
+                model_class=EnrichmentChunk,
+            )
+            for item in enrichment.items:
+                enrichment_by_id[item.item_id] = item
         for payload in collected:
             for item in payload.items:
                 enriched = enrichment_by_id.get(item.id)
@@ -125,9 +130,8 @@ def enrich_collected_data(config: AppConfig, collected: list[CollectedSourceData
                 item.geography = sorted(set(item.geography + enriched.geography))
                 item.raw["content_type"] = enriched.content_type
                 item.raw["significance_hint"] = enriched.significance
-                item.raw["same_story_hints"] = enriched.same_story_hints
                 item.raw["classifier_confidence"] = enriched.confidence
-        notes.append(f"Fast-model enrichment applied with {fast_model}.")
+        notes.append(f"Fast-model enrichment applied with {fast_model} to {len(enrichment_by_id)} items.")
     except (APIConnectionError, APIError, ValidationError, json.JSONDecodeError) as exc:
         notes.append(f"Fast-model enrichment skipped: {exc}")
 

@@ -78,8 +78,17 @@ def _preferred_top_clusters(clusters: list[StoryCluster]) -> list[StoryCluster]:
 
 
 def _cluster_text_tokens(cluster: StoryCluster) -> set[str]:
-    text = " ".join([cluster.title, cluster.summary, cluster.what_changed or "", cluster.why_now or ""])
-    return {token for token in text.lower().split() if token}
+    text = " ".join(
+        [
+            cluster.title,
+            cluster.summary,
+            cluster.what_changed or "",
+            cluster.why_now or "",
+            " ".join(cluster.topics),
+            " ".join(cluster.geography),
+        ]
+    )
+    return {token for token in text.lower().replace("_", " ").replace("-", " ").split() if token}
 
 
 def _cluster_similarity(left: StoryCluster, right: StoryCluster) -> float:
@@ -110,6 +119,16 @@ def _select_diverse_top_story_ids(candidate_ids: list[str], cluster_lookup: dict
             if len(selected) >= limit:
                 break
     return selected
+
+
+def _fill_top_story_ids(
+    preferred_ids: list[str],
+    selected_ids: list[str],
+    cluster_lookup: dict[str, StoryCluster],
+    limit: int = 5,
+) -> list[str]:
+    combined = list(dict.fromkeys(selected_ids + preferred_ids))
+    return _select_diverse_top_story_ids(combined, cluster_lookup, limit=limit)
 
 
 def _build_client(ai_config: AIConfig) -> OpenAI:
@@ -181,6 +200,8 @@ def build_snapshot_payload(
 ) -> DailySnapshot:
     snapshot_id = generated_at.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     preferred_top = _preferred_top_clusters(clusters)
+    preferred_top_ids = [cluster.id for cluster in preferred_top[:5]]
+    preferred_theme_titles = [cluster.title for cluster in preferred_top[:3]]
     return DailySnapshot(
         snapshot_id=snapshot_id,
         snapshot_date=generated_at.date().isoformat(),
@@ -194,8 +215,8 @@ def build_snapshot_payload(
         ),
         outlook="Watch the top-ranked stories for confirmation, official responses, and follow-on market or policy effects.",
         risk_summary="Risk remains heuristic until AI interpretation is enabled; use top stories and watch items as the main signal.",
-        themes=[cluster.title for cluster in clusters[:3]],
-        top_story_ids=[cluster.id for cluster in preferred_top[:5]],
+        themes=preferred_theme_titles,
+        top_story_ids=preferred_top_ids,
         watch_items=[
             WatchItem(
                 label=cluster.title,
@@ -302,8 +323,11 @@ def _current_payload(base_snapshot: DailySnapshot, config: AppConfig) -> dict:
                     {
                         "label": metric.label,
                         "value": metric.value,
+                        "previous_value": metric.previous_value,
                         "change": metric.change,
+                        "change_percent": metric.change_percent,
                         "context": metric.context,
+                        "freshness": metric.freshness,
                     }
                     for metric in section.metrics[:8]
                 ],
@@ -344,6 +368,7 @@ def _run_global_brief_pass(
     config: AppConfig,
     history_payload: list[dict],
     enriched_snapshot: DailySnapshot,
+    selected_clusters: list[StoryCluster],
 ) -> AIGlobalBrief:
     return _structured_chat_completion(
         client,
@@ -355,13 +380,15 @@ def _run_global_brief_pass(
             "Avoid repeating the same point across lead summary, themes, and watch items. "
             "Write direct declarative prose only. Do not mention prompts, datasets, examples, or how the summary was produced. "
             "Do not elevate commentary, opinion, or feature-style stories unless they clearly dominate the hard-news agenda. "
-            "Do not open with generic framing like 'Here are the key points' or similar list-introductions."
+            "Do not open with generic framing like 'Here are the key points' or similar list-introductions. "
+            "Only mention developments that appear in the selected top clusters."
         ),
         user_prompt=(
-            "Using the enriched snapshot below, produce the final top-level morning briefing. "
+            "Using only the selected top clusters below, produce the final top-level morning briefing. "
             f"Preferences: {json.dumps(config.briefing.model_dump(), default=str)}. "
             f"History: {json.dumps(history_payload, default=str)}. "
-            f"Enriched snapshot: {json.dumps(enriched_snapshot.model_dump(mode='json'), default=str)}"
+            f"Selected top clusters: {json.dumps([cluster.model_dump(mode='json') for cluster in selected_clusters], default=str)}. "
+            f"Snapshot memory: {json.dumps(enriched_snapshot.memory.model_dump(mode='json'), default=str)}"
         ),
         model_class=AIGlobalBrief,
     )
@@ -433,14 +460,39 @@ def synthesize_snapshot(
             }
         )
 
-        global_brief = _run_global_brief_pass(client, config, history_payload, enriched_snapshot)
-        if _contains_meta_language(global_brief.lead_summary) or _contains_meta_language(global_brief.what_changed_summary):
+        preferred_ids = [cluster.id for cluster in _preferred_top_clusters(enriched_snapshot.clusters)]
+        top_story_ids = _select_diverse_top_story_ids(preferred_ids, cluster_lookup)
+        selected_clusters = [cluster_lookup[story_id] for story_id in top_story_ids if story_id in cluster_lookup]
+
+        global_brief = _run_global_brief_pass(client, config, history_payload, enriched_snapshot, selected_clusters)
+        if (
+            _contains_meta_language(global_brief.lead_summary)
+            or _contains_meta_language(global_brief.what_changed_summary)
+            or "multiple prominent stories" in global_brief.lead_summary.lower()
+        ):
             raise ValueError("AI global brief contained meta/template language.")
-        top_story_ids = [story_id for story_id in global_brief.top_story_ids if story_id in cluster_lookup]
-        top_story_ids = _select_diverse_top_story_ids(top_story_ids, cluster_lookup)
-        if not top_story_ids:
-            preferred_ids = [cluster.id for cluster in _preferred_top_clusters(enriched_snapshot.clusters)]
-            top_story_ids = _select_diverse_top_story_ids(preferred_ids, cluster_lookup)
+        model_story_ids = [story_id for story_id in global_brief.top_story_ids if story_id in cluster_lookup]
+        if model_story_ids:
+            top_story_ids = _fill_top_story_ids(preferred_ids, model_story_ids, cluster_lookup)
+        else:
+            top_story_ids = _fill_top_story_ids(preferred_ids, top_story_ids, cluster_lookup)
+        selected_themes = [cluster_lookup[story_id].title for story_id in top_story_ids[:3] if story_id in cluster_lookup]
+        watch_items = global_brief.watch_items or enriched_snapshot.watch_items
+        if len(watch_items) < 3:
+            existing_labels = {item.label for item in watch_items}
+            for cluster in (cluster_lookup[story_id] for story_id in top_story_ids if story_id in cluster_lookup):
+                if cluster.title in existing_labels:
+                    continue
+                watch_items.append(
+                    WatchItem(
+                        label=cluster.title,
+                        note=(cluster.watch_points[0] if cluster.watch_points else cluster.why_it_matters),
+                        section_id=cluster.section,
+                    )
+                )
+                existing_labels.add(cluster.title)
+                if len(watch_items) >= 3:
+                    break
 
         return enriched_snapshot.model_copy(
             update={
@@ -448,9 +500,9 @@ def synthesize_snapshot(
                 "what_changed_summary": global_brief.what_changed_summary,
                 "outlook": global_brief.outlook,
                 "risk_summary": global_brief.risk_summary,
-                "themes": global_brief.themes or enriched_snapshot.themes,
+                "themes": selected_themes or global_brief.themes or enriched_snapshot.themes,
                 "top_story_ids": top_story_ids,
-                "watch_items": global_brief.watch_items or enriched_snapshot.watch_items,
+                "watch_items": watch_items,
                 "generation_notes": enriched_snapshot.generation_notes,
             }
         )

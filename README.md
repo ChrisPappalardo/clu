@@ -14,7 +14,7 @@ This repository now contains the initial project scaffold:
 - Docker Compose for local orchestration
 - setup docs for source selection and API keys
 
-The next implementation phase is hardening source selection and adding richer ranking, persistence, and testing.
+The current implementation phase is expanding source coverage, enriching macro and market signals, and tightening the dashboard/report layout around the stored briefing.
 
 ## Repository layout
 
@@ -63,5 +63,7 @@ Create the `logs/` directory before enabling the job.
 - The default AI config targets a host-run Ollama server through its OpenAI-compatible API at `http://host.docker.internal:11434/v1/`.
 - `OLLAMA_FAST_MODEL`, `OLLAMA_MODEL`, and `OLLAMA_BASE_URL` can be changed in `.env` without editing the YAML config.
 - The fast model is used for item enrichment and routing before clustering; the main model is used for final briefing synthesis.
+- The default source pack now includes separate world and markets editorial inputs, including Guardian business coverage and BBC business RSS in addition to the world-news feeds.
+- The default FRED config now splits slower macro indicators from daily market-state indicators and derives a 2s10s Treasury spread for the markets section.
 - If the configured AI endpoint is unavailable, the ingest service falls back to heuristic summaries so the pipeline can still run.
 - The current scaffold uses file-based report persistence with briefing history. The shared schema is designed so a database-backed implementation can be added without changing the API or dashboard contract.

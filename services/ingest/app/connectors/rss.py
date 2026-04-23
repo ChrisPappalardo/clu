@@ -15,8 +15,18 @@ class RSSConnector(BaseConnector):
     def _is_allowed_entry(self, entry) -> bool:
         title = entry.get("title", "")
         link = entry.get("link", "")
+        include_title_patterns = self.config.params.get("include_title_patterns", [])
+        include_url_patterns = self.config.params.get("include_url_patterns", [])
         exclude_title_patterns = self.config.params.get("exclude_title_patterns", [])
         exclude_url_patterns = self.config.params.get("exclude_url_patterns", [])
+        if include_title_patterns and not any(
+            re.search(pattern, title, flags=re.IGNORECASE) for pattern in include_title_patterns
+        ):
+            return False
+        if include_url_patterns and not any(
+            pattern.lower() in link.lower() for pattern in include_url_patterns
+        ):
+            return False
         for pattern in exclude_title_patterns:
             if re.search(pattern, title, flags=re.IGNORECASE):
                 return False

@@ -75,12 +75,12 @@ SOURCE_QUALITY_HINTS = {
 }
 
 CONTENT_TYPE_ADJUSTMENTS = {
-    "hard_news": 0.22,
+    "hard_news": 0.28,
     "mixed": 0.05,
-    "analysis": -0.05,
-    "explainer": -0.12,
-    "feature": -0.22,
-    "opinion": -0.35,
+    "analysis": -0.12,
+    "explainer": -0.18,
+    "feature": -0.4,
+    "opinion": -0.55,
 }
 
 
@@ -91,6 +91,13 @@ def _tokenize(text: str) -> list[str]:
 
 def _token_set(text: str) -> set[str]:
     return set(_tokenize(text))
+
+
+def _normalized_tag_tokens(values: list[str]) -> set[str]:
+    tokens: set[str] = set()
+    for value in values:
+        tokens.update(_tokenize(value.replace("_", " ").replace("-", " ")))
+    return tokens
 
 
 def _cluster_key_from_tokens(tokens: set[str], fallback: str) -> str:
@@ -146,7 +153,11 @@ def _cluster_signature(cluster_id: str) -> str:
 
 
 def _cluster_token_signature(cluster: StoryCluster) -> set[str]:
-    return _token_set(" ".join([cluster.title, cluster.summary, *cluster.developments]))
+    return (
+        _token_set(" ".join([cluster.title, cluster.summary, *cluster.developments]))
+        | _normalized_tag_tokens(cluster.topics)
+        | _normalized_tag_tokens(cluster.geography)
+    )
 
 
 def _jaccard_similarity(left: set[str], right: set[str]) -> float:
@@ -180,14 +191,15 @@ def _continuity_matches(
 def _assign_cluster_keys(items: list[SnapshotItem]) -> dict[str, list[SnapshotItem]]:
     groups: list[dict] = []
     for item in items:
-        tokens = _token_set(f"{item.title} {item.summary}")
+        tokens = (
+            _token_set(f"{item.title} {item.summary}")
+            | _normalized_tag_tokens(item.topics)
+            | _normalized_tag_tokens(item.geography)
+        )
         matched_group = None
         best_similarity = 0.0
         for group in groups:
             similarity = _jaccard_similarity(tokens, group["tokens"])
-            hint_overlap = bool(set(item.raw.get("same_story_hints", [])) & set(group["titles"]))
-            if hint_overlap:
-                similarity = max(similarity, 0.45)
             if similarity > best_similarity and similarity >= 0.26:
                 matched_group = group
                 best_similarity = similarity
@@ -197,14 +209,12 @@ def _assign_cluster_keys(items: list[SnapshotItem]) -> dict[str, list[SnapshotIt
                 "key": cluster_key,
                 "tokens": set(tokens),
                 "items": [item],
-                "titles": {item.title},
             }
             groups.append(new_group)
             item.cluster_key = cluster_key
         else:
             matched_group["tokens"].update(tokens)
             matched_group["items"].append(item)
-            matched_group["titles"].add(item.title)
             item.cluster_key = matched_group["key"]
 
     return {group["key"]: group["items"] for group in groups}
@@ -227,11 +237,24 @@ def _cluster_support_penalty(source_count: int, cluster_tokens: set[str]) -> flo
     return 0.28
 
 
+def _cluster_content_penalty(cluster_items: list[SnapshotItem]) -> float:
+    if not cluster_items:
+        return 0.0
+    content_types = [str(item.raw.get("content_type", "")).lower() for item in cluster_items]
+    if not content_types:
+        return 0.0
+    if all(content_type in {"feature", "opinion"} for content_type in content_types if content_type):
+        return 0.45
+    if all(content_type in {"analysis", "explainer", "feature", "opinion"} for content_type in content_types if content_type):
+        return 0.22
+    return 0.0
+
+
 def _select_diverse_clusters(clusters: list[StoryCluster], limit: int) -> list[StoryCluster]:
     selected: list[StoryCluster] = []
     for candidate in clusters:
         candidate_tokens = _cluster_token_signature(candidate)
-        if any(_jaccard_similarity(candidate_tokens, _cluster_token_signature(existing)) >= 0.3 for existing in selected):
+        if any(_jaccard_similarity(candidate_tokens, _cluster_token_signature(existing)) >= 0.22 for existing in selected):
             continue
         selected.append(candidate)
         if len(selected) >= limit:
@@ -291,6 +314,7 @@ def build_sections_and_clusters(
             source_quality = sum(_source_quality_bonus(item.source_name, item.source_id) for item in cluster_items) / max(len(cluster_items), 1)
             source_diversity_bonus = math.log(len(source_ids) + 1.0, 2) * 0.3
             support_penalty = _cluster_support_penalty(len(source_ids), cluster_tokens)
+            content_penalty = _cluster_content_penalty(cluster_items)
             importance = round(
                 sum(item.importance_score for item in cluster_items) / max(len(cluster_items), 1)
                 + source_diversity_bonus
@@ -298,7 +322,7 @@ def build_sections_and_clusters(
                 3,
             )
             importance = round(
-                importance - support_penalty,
+                importance - support_penalty - content_penalty,
                 3,
             )
 

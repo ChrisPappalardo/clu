@@ -52,6 +52,7 @@ The top-level report object is `DailySnapshot`. It contains:
   - `metrics[]` for structured data signals
 - `clusters[]` for ranked story-level briefings
   - cluster `what_changed`, `why_now`, `why_it_matters`, and risk framing
+- `metrics[]` can now carry prior value, absolute change, percent change, freshness, and source-specific raw context so the dashboard and HTML report can present compact market and macro state
 - `memory` describing continuity from prior snapshots
 - `source_attributions[]`
 - `generation_notes[]`

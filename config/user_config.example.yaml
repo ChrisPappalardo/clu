@@ -68,6 +68,26 @@ sources:
         - "revealed the true cost"
         - "taught us to"
 
+  - id: guardian-business
+    type: guardian
+    enabled: true
+    section: markets
+    display_name: The Guardian Business
+    params:
+      api_key_env: GUARDIAN_API_KEY
+      section: business
+      query: "(markets OR economy OR inflation OR rates OR oil OR trade)"
+      page_size: 8
+      exclude_url_patterns:
+        - /commentisfree/
+        - /opinion/
+      exclude_title_patterns:
+        - " | "
+        - "^How\\s"
+        - "^Why\\s"
+        - "^Opinion\\b"
+        - "^Analysis\\b"
+
   - id: gdelt-world
     type: gdelt
     enabled: false
@@ -105,6 +125,19 @@ sources:
         - "^Why\\s"
         - "^The world explained"
 
+  - id: bbc-business-rss
+    type: rss
+    enabled: true
+    section: markets
+    display_name: BBC Business
+    params:
+      feed_url: http://feeds.bbci.co.uk/news/business/rss.xml
+      max_items: 6
+      exclude_title_patterns:
+        - "^How\\s"
+        - "^Why\\s"
+        - "^Analysis\\b"
+
   - id: dw-world-rss
     type: rss
     enabled: true
@@ -117,6 +150,24 @@ sources:
         - "^How\\s"
         - "^Why\\s"
 
+  - id: pbs-world-rss
+    type: rss
+    enabled: true
+    section: world-news
+    display_name: PBS NewsHour World
+    params:
+      feed_url: https://www.pbs.org/newshour/feeds/rss/headlines
+      max_items: 6
+      include_url_patterns:
+        - /world/
+      exclude_title_patterns:
+        - "^How\\s"
+        - "^Why\\s"
+        - "^Listen\\s"
+        - "World Cup"
+        - "tourist sites"
+        - "pyramids"
+
   - id: fred-macro
     type: fred
     enabled: true
@@ -125,10 +176,60 @@ sources:
     params:
       api_key_env: FRED_API_KEY
       series:
-        - CPIAUCSL
-        - UNRATE
-        - FEDFUNDS
-        - DGS10
+        - id: CPIAUCSL
+          label: CPI
+          section: macro
+        - id: CPILFESL
+          label: Core CPI
+          section: macro
+        - id: UNRATE
+          label: Unemployment Rate
+          unit: "%"
+          section: macro
+        - id: PAYEMS
+          label: Nonfarm Payrolls
+          section: macro
+        - id: RSAFS
+          label: Retail Sales
+          section: macro
+        - id: INDPRO
+          label: Industrial Production
+          section: macro
+        - id: HOUST
+          label: Housing Starts
+          section: macro
+        - id: FEDFUNDS
+          label: Fed Funds Rate
+          unit: "%"
+          section: macro
+        - id: DGS10
+          label: US 10Y Treasury
+          unit: "%"
+          section: markets
+        - id: DGS2
+          label: US 2Y Treasury
+          unit: "%"
+          section: markets
+        - id: DCOILBRENTEU
+          label: Brent Crude Spot
+          unit: USD/bbl
+          section: markets
+        - id: DTWEXBGS
+          label: Broad Dollar Index
+          section: markets
+        - id: VIXCLS
+          label: VIX
+          section: markets
+        - id: BAMLH0A0HYM2
+          label: High Yield Spread
+          unit: "%"
+          section: markets
+        - id: SP500
+          label: S&P 500
+          section: markets
+        - id: NASDAQCOM
+          label: Nasdaq Composite
+          section: markets
 
   - id: world-bank
     type: world_bank
