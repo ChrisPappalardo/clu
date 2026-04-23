@@ -2,23 +2,87 @@ from __future__ import annotations
 
 import json
 import os
-from typing import TypeVar
+from typing import Literal, TypeVar
 
 from openai import OpenAI
 from openai import APIConnectionError, APIError
 from pydantic import BaseModel, Field
 from pydantic import ValidationError
+from pydantic import field_validator
 
 from clu_core.models import AIConfig, AppConfig, CollectedSourceData, SnapshotItem
 
 
+CONTENT_TYPE_SYNONYMS = {
+    "news": "hard_news",
+    "hard news": "hard_news",
+    "hard_news": "hard_news",
+    "analysis": "analysis",
+    "analytical": "analysis",
+    "explainer": "explainer",
+    "explanation": "explainer",
+    "feature": "feature",
+    "opinion": "opinion",
+    "editorial": "opinion",
+    "mixed": "mixed",
+}
+
+SIGNIFICANCE_SYNONYMS = {
+    "high": "high",
+    "medium": "medium",
+    "med": "medium",
+    "moderate": "medium",
+    "low": "low",
+}
+
+
 class ItemEnrichment(BaseModel):
     item_id: str
-    content_type: str
-    significance: str
+    content_type: Literal["hard_news", "analysis", "explainer", "feature", "opinion", "mixed"]
+    significance: Literal["high", "medium", "low"]
     topics: list[str] = Field(default_factory=list)
     geography: list[str] = Field(default_factory=list)
     confidence: float = 0.0
+
+    @field_validator("content_type", mode="before")
+    @classmethod
+    def _normalize_content_type(cls, value: str) -> str:
+        normalized = CONTENT_TYPE_SYNONYMS.get(str(value).strip().lower())
+        if normalized is None:
+            raise ValueError(f"Unsupported content_type: {value}")
+        return normalized
+
+    @field_validator("significance", mode="before")
+    @classmethod
+    def _normalize_significance(cls, value: str) -> str:
+        normalized = SIGNIFICANCE_SYNONYMS.get(str(value).strip().lower())
+        if normalized is None:
+            raise ValueError(f"Unsupported significance: {value}")
+        return normalized
+
+    @field_validator("topics", "geography", mode="before")
+    @classmethod
+    def _normalize_tags(cls, value):
+        if not value:
+            return []
+        cleaned: list[str] = []
+        for entry in value:
+            normalized = str(entry).strip()
+            if not normalized:
+                continue
+            cleaned.append(normalized[:48])
+            if len(cleaned) >= 3:
+                break
+        return cleaned
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def _normalize_confidence(cls, value) -> float:
+        try:
+            confidence = float(value)
+        except (TypeError, ValueError):
+            return 0.0
+        return max(0.0, min(confidence, 1.0))
 
 
 class EnrichmentChunk(BaseModel):

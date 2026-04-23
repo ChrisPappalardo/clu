@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -34,10 +35,18 @@ def list_snapshot_paths(output_dir: Path) -> list[Path]:
     )
 
 
-def load_recent_snapshots(output_dir: Path, limit: int) -> list[DailySnapshot]:
+def load_all_snapshots(output_dir: Path) -> list[DailySnapshot]:
     paths = list_snapshot_paths(output_dir)
-    snapshots = [load_snapshot(path) for path in paths[-limit:]]
+    snapshots = [load_snapshot(path) for path in paths]
     return [snapshot for snapshot in snapshots if snapshot is not None]
+
+
+def load_recent_snapshots(output_dir: Path, days: int) -> list[DailySnapshot]:
+    snapshots = load_all_snapshots(output_dir)
+    if days <= 0:
+        return snapshots
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    return [snapshot for snapshot in snapshots if snapshot.generated_at.astimezone(timezone.utc) >= cutoff]
 
 
 def write_snapshot_index(output_dir: Path, snapshots: list[DailySnapshot]) -> None:

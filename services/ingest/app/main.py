@@ -12,7 +12,7 @@ from clu_core.rendering import render_snapshot_html
 from .briefing_engine import build_sections_and_clusters
 from .enrichment import enrich_collected_data
 from .source_registry import build_connector
-from .storage import load_recent_snapshots, write_snapshot_index
+from .storage import load_all_snapshots, load_recent_snapshots, write_snapshot_index
 from .summarizer import build_snapshot_payload, synthesize_snapshot
 
 
@@ -27,6 +27,7 @@ def main() -> None:
     config = load_config(config_file)
     generated_at = datetime.now().astimezone()
     history = load_recent_snapshots(output_dir, config.ai.history_window_days)
+    all_snapshots = load_all_snapshots(output_dir)
     collected = []
     for source in config.sources:
         if not source.enabled:
@@ -80,7 +81,7 @@ def main() -> None:
     latest_html.write_text(snapshot_html, encoding="utf-8")
     dated_json.write_text(snapshot_json, encoding="utf-8")
     dated_html.write_text(snapshot_html, encoding="utf-8")
-    write_snapshot_index(output_dir, history + [snapshot])
+    write_snapshot_index(output_dir, all_snapshots + [snapshot])
 
     print(f"Wrote {latest_json}")
     print(f"Wrote {latest_html}")
