@@ -33,12 +33,14 @@
 - AI enrichment now normalizes and validates model output against the vocabulary expected by ranking logic.
 - Verified with a full Ollama-backed ingest on `2026-04-23`; new artifacts were written successfully.
 - Fresh snapshot review suggests the next quality gaps are source filtering/normalization and AI writing quality in section-level narrative fields.
+- Source filtering was tightened so Guardian and RSS connectors now share consistent pattern handling, Guardian `trailText` is cleaned before rendering, and Guardian config can exclude content types such as `liveblog`.
+- Added a section-text cleanup/fallback layer so section `what_changed`, `why_now`, `risk_summary`, and `narrative` no longer surface markdown-ish formatting or raw cluster IDs in the dashboard/email output.
 
 ## Next Review Focus
 
-- Guardian filtering still needs tightening for regex-style exclusions and content-type handling such as liveblogs.
+- Verify the Guardian/source-filter improvements against a clean full ingest artifact and continue tightening source selection where noisy items still leak through.
 - Coverage selection should become budgeted across sections/topics instead of relying mainly on rank order of the first enriched items.
-- AI section narratives should be constrained further; current output can still drift into list-like or markdown-ish text that is not suitable for polished dashboard/email rendering.
+- AI section narratives still need stronger quality control; they no longer leak raw IDs/markdown, but they can still drift into weak or misleading prose.
 
 ## Product Notes
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime, timezone
 from typing import TypeVar
 
@@ -66,6 +67,71 @@ META_PHRASES = (
     "the lead summary",
     "this summary",
 )
+CLUSTER_ID_PATTERN = re.compile(r"\b\d{8}T\d{6}Z:[a-z0-9-]+:[a-z0-9-]+\b")
+
+
+def _cleanup_ai_text(text: str | None) -> str:
+    if not text:
+        return ""
+    cleaned = text.replace("`", "").replace("**", "")
+    cleaned = re.sub(r"^\s*[-*]\s*", "", cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
+
+
+def _contains_unfriendly_formatting(text: str | None) -> bool:
+    if not text:
+        return True
+    cleaned = text.strip()
+    return (
+        cleaned == "-"
+        or "`" in cleaned
+        or "**" in cleaned
+        or CLUSTER_ID_PATTERN.search(cleaned) is not None
+        or cleaned.startswith("- ")
+    )
+
+
+def _section_change_fallback(section: SnapshotSection) -> str:
+    total = len(section.clusters)
+    if total == 0:
+        return "No major new developments stood out in this section."
+    continuing = sum(1 for cluster in section.clusters if cluster.related_previous_cluster_ids)
+    newly_emerged = total - continuing
+    if newly_emerged and continuing:
+        return f"{newly_emerged} new developments rose near the top while {continuing} continued from the prior snapshot."
+    if newly_emerged:
+        return f"Most of the signal here is newly emerged, with {newly_emerged} developments driving the section."
+    return f"This section is being driven by {continuing} continuing developments rather than a fresh turn in coverage."
+
+
+def _section_why_now_fallback(section: SnapshotSection) -> str:
+    cluster_count = len(section.clusters)
+    metric_count = len(section.metrics)
+    if cluster_count and metric_count:
+        return f"This section matters now because both {cluster_count} active story threads and {metric_count} updated indicators are moving together."
+    if cluster_count:
+        return f"This section matters now because {cluster_count} active story threads are shaping the current briefing."
+    if metric_count:
+        return f"This section matters now because {metric_count} updated indicators changed the current picture."
+    return "This section remains in view, but no strong new signal was collected."
+
+
+def _section_risk_fallback(section: SnapshotSection) -> str:
+    if not section.clusters:
+        return "No immediate section-level risk signal was identified."
+    if any((cluster.risk_level or "").lower() == "high" for cluster in section.clusters):
+        return "At least one leading development here carries elevated risk and should be watched for escalation or spillover effects."
+    return "The main risk is that follow-up reporting or additional data could quickly change the weight of the leading developments."
+
+
+def _section_narrative_fallback(section: SnapshotSection) -> str | None:
+    if not section.clusters:
+        return None
+    top_titles = [cluster.title for cluster in section.clusters[:2]]
+    if len(top_titles) == 1:
+        return f"The section is led by {top_titles[0]}."
+    return f"The section is led by {top_titles[0]}, alongside {top_titles[1]}."
 
 
 def _preferred_top_clusters(clusters: list[StoryCluster]) -> list[StoryCluster]:
@@ -351,7 +417,8 @@ def _run_interpretation_pass(
             "For each cluster and section, explain what changed, why it matters now, and the main risk. "
             "Be neutral, concise, and avoid speculation beyond the provided evidence. "
             "Do not overstate thin single-source stories unless they are clearly high-significance. "
-            "Do not treat feature pieces, soft profiles, or commentary as top hard-news developments."
+            "Do not treat feature pieces, soft profiles, or commentary as top hard-news developments. "
+            "Write clean prose sentences only. Do not output markdown, bullets, placeholder symbols, or raw cluster IDs."
         ),
         user_prompt=(
             "Interpret the current ranked clusters and sections in light of the recent snapshot history. "
@@ -435,14 +502,34 @@ def synthesize_snapshot(
         updated_sections = []
         for section in base_snapshot.sections:
             update = section_updates.get(section.id)
+            narrative = _cleanup_ai_text(update.narrative) if update else ""
+            what_changed = _cleanup_ai_text(update.what_changed) if update else ""
+            why_now = _cleanup_ai_text(update.why_now) if update else ""
+            risk_summary = _cleanup_ai_text(update.risk_summary) if update else ""
             updated_sections.append(
                 section.model_copy(
                     update={
                         "summary": update.summary if update else section.summary,
-                        "narrative": update.narrative if update else section.narrative,
-                        "what_changed": update.what_changed if update else section.what_changed,
-                        "why_now": update.why_now if update else section.why_now,
-                        "risk_summary": update.risk_summary if update else section.risk_summary,
+                        "narrative": (
+                            _section_narrative_fallback(section)
+                            if _contains_unfriendly_formatting(narrative)
+                            else narrative
+                        ),
+                        "what_changed": (
+                            _section_change_fallback(section)
+                            if _contains_unfriendly_formatting(what_changed)
+                            else what_changed
+                        ),
+                        "why_now": (
+                            _section_why_now_fallback(section)
+                            if _contains_unfriendly_formatting(why_now)
+                            else why_now
+                        ),
+                        "risk_summary": (
+                            _section_risk_fallback(section)
+                            if _contains_unfriendly_formatting(risk_summary)
+                            else risk_summary
+                        ),
                         "clusters": [cluster_lookup[cluster.id] for cluster in section.clusters if cluster.id in cluster_lookup],
                     }
                 )

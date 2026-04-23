@@ -56,6 +56,8 @@ sources:
       section: world
       query: "(geopolitics OR diplomacy OR conflict OR election OR climate)"
       page_size: 10
+      exclude_content_types:
+        - liveblog
       exclude_url_patterns:
         - /commentisfree/
         - /opinion/
@@ -78,6 +80,8 @@ sources:
       section: business
       query: "(markets OR economy OR inflation OR rates OR oil OR trade)"
       page_size: 8
+      exclude_content_types:
+        - liveblog
       exclude_url_patterns:
         - /commentisfree/
         - /opinion/

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-import re
 from uuid import uuid4
 
 import feedparser
@@ -9,6 +8,7 @@ import feedparser
 from clu_core.models import CollectedSourceData, SnapshotItem, SourceAttribution
 
 from .base import BaseConnector
+from .filtering import matches_regex_patterns, matches_substring_patterns
 
 
 class RSSConnector(BaseConnector):
@@ -19,20 +19,14 @@ class RSSConnector(BaseConnector):
         include_url_patterns = self.config.params.get("include_url_patterns", [])
         exclude_title_patterns = self.config.params.get("exclude_title_patterns", [])
         exclude_url_patterns = self.config.params.get("exclude_url_patterns", [])
-        if include_title_patterns and not any(
-            re.search(pattern, title, flags=re.IGNORECASE) for pattern in include_title_patterns
-        ):
+        if include_title_patterns and not matches_regex_patterns(title, include_title_patterns):
             return False
-        if include_url_patterns and not any(
-            pattern.lower() in link.lower() for pattern in include_url_patterns
-        ):
+        if include_url_patterns and not matches_substring_patterns(link, include_url_patterns):
             return False
-        for pattern in exclude_title_patterns:
-            if re.search(pattern, title, flags=re.IGNORECASE):
-                return False
-        for pattern in exclude_url_patterns:
-            if pattern.lower() in link.lower():
-                return False
+        if matches_regex_patterns(title, exclude_title_patterns):
+            return False
+        if matches_substring_patterns(link, exclude_url_patterns):
+            return False
         return True
 
     def fetch(self) -> CollectedSourceData:

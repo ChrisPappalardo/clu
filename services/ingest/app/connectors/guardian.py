@@ -1,24 +1,36 @@
 from __future__ import annotations
 
 import os
+import re
 from datetime import datetime, timezone
+from html import unescape
 
 from clu_core.models import CollectedSourceData, SnapshotItem, SourceAttribution
 
 from .base import BaseConnector
+from .filtering import matches_regex_patterns, matches_substring_patterns
 from ..http_utils import get_json
 
 
 class GuardianConnector(BaseConnector):
+    def _clean_text(self, value: str) -> str:
+        cleaned = unescape(value)
+        cleaned = re.sub(r"<[^>]+>", " ", cleaned)
+        return re.sub(r"\s+", " ", cleaned).strip()
+
     def _is_allowed_entry(self, entry: dict) -> bool:
         title = entry.get("webTitle", "")
         url = entry.get("webUrl", "")
-        for pattern in self.config.params.get("exclude_title_patterns", []):
-            if pattern.lower() in title.lower():
-                return False
-        for pattern in self.config.params.get("exclude_url_patterns", []):
-            if pattern.lower() in url.lower():
-                return False
+        content_type = str(entry.get("type", "")).lower()
+        exclude_content_types = {
+            value.lower() for value in self.config.params.get("exclude_content_types", [])
+        }
+        if content_type in exclude_content_types:
+            return False
+        if matches_regex_patterns(title, self.config.params.get("exclude_title_patterns", [])):
+            return False
+        if matches_substring_patterns(url, self.config.params.get("exclude_url_patterns", [])):
+            return False
         return True
 
     def fetch(self) -> CollectedSourceData:
@@ -48,17 +60,17 @@ class GuardianConnector(BaseConnector):
         data = [
             entry
             for entry in get_json(
-            "https://content.guardianapis.com/search",
-            params=params,
-        )["response"]["results"]
+                "https://content.guardianapis.com/search",
+                params=params,
+            )["response"]["results"]
             if self._is_allowed_entry(entry)
         ]
 
         items = [
             SnapshotItem(
                 id=entry["id"],
-                title=entry["webTitle"],
-                summary=entry.get("fields", {}).get("trailText", ""),
+                title=self._clean_text(entry["webTitle"]),
+                summary=self._clean_text(entry.get("fields", {}).get("trailText", "")),
                 url=entry["webUrl"],
                 section=self.config.section,
                 published_at=datetime.fromisoformat(
