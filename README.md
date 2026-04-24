@@ -49,9 +49,10 @@ docker compose run --rm ingest
 Example host crontab entry for a 6:30 AM local snapshot:
 
 ```cron
-30 6 * * * cd /home/cpappalardo/src/demos/clu && /usr/bin/docker compose run --rm ingest >> /home/cpappalardo/src/demos/clu/logs/ingest.log 2>&1
+30 6 * * * cd /path/to/clu && /usr/bin/docker compose run --rm ingest >> /path/to/clu/logs/ingest.log 2>&1
 ```
 
+Replace `/path/to/clu` with the absolute path to your CLU repository.
 Create the `logs/` directory before enabling the job.
 
 ## Notes
