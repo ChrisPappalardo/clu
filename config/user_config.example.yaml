@@ -2,8 +2,8 @@ user:
   timezone: America/Los_Angeles
   home_location:
     label: San Francisco, CA
-    latitude: 37.7749
-    longitude: -122.4194
+    latitude: 37.8025
+    longitude: -122.4058
   delivery:
     store_html_report: true
     store_json_report: true
