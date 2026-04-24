@@ -11,7 +11,7 @@ from ..http_utils import get_json
 
 
 class FREDConnector(BaseConnector):
-    INDEX_UNIT_HIDDEN_SERIES = {"CPIAUCSL", "CPILFESL", "INDPRO"}
+    INDEX_UNIT_HIDDEN_SERIES = {"CPIAUCSL", "CPILFESL", "INDPRO", "DTWEXBGS"}
     MARKET_METADATA = {
         "DGS2": {"market_group": "US Rates & Energy", "market_region": "US", "display_order": 10},
         "DGS10": {"market_group": "US Rates & Energy", "market_region": "US", "display_order": 11},

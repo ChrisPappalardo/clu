@@ -46,6 +46,10 @@
 - Adjusted `US Rates & Energy` ordering so the `US 2Y Treasury` appears before the `US 10Y Treasury`.
 - Reworked the weather connector so output is location-aware and human-readable: US-style locations now request imperial units from Open-Meteo, weather labels render as `High`, `Low`, `Precipitation`, and `Conditions`, and weather codes map to readable condition text such as `Overcast`.
 - Verified with snapshot `20260424T012853Z`; the `markets` section order now starts `US 2Y Treasury`, `US 10Y Treasury`, `Brent Crude Spot`, and the weather section now shows `60.4 °F`, `30.2 °F`, `0 inch`, and `Overcast` for the current Clio, CA forecast.
+- Began a full React dashboard overhaul on the current branch to decouple the desktop web experience from the future email/report layout.
+- Replaced the old narrow stacked dashboard with a desktop-first briefing board: interactive top-story navigator + detail pane, dedicated macro and markets analysis panels, grouped cross-asset market board, visible source attribution rail, and smaller secondary radar cards for weather/disruptions/science.
+- Weather is now labeled with the configured home location in the dashboard via the API config template, and the weather section is presented as a local forecast card instead of a generic data block.
+- `docker compose exec -T web npm run build` passed after the dashboard rewrite.
 
 ## Next Review Focus
 
@@ -54,6 +58,7 @@
 - AI section narratives still need stronger quality control; they no longer leak raw IDs/markdown, but they can still drift into weak or misleading prose.
 - The markets section now shows the larger grouped metric set; next UI/content pass should refine label wording, compactness, and which groups deserve the most prominence on smaller screens.
 - Weather is now legible for US locations, but the next pass should improve semantics further by surfacing more meaningful forecast concepts such as precipitation chance, snow/rain framing, and a concise daily weather summary instead of relying mainly on raw daily fields.
+- The dashboard overhaul needs an in-browser visual pass against real desktop and mobile viewports; code/build are in place, but the next step should tune spacing, hierarchy, and the treatment of low-signal sections after seeing the live result.
 
 ## Product Notes
 
