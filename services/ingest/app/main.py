@@ -32,7 +32,7 @@ def main() -> None:
     for source in config.sources:
         if not source.enabled:
             continue
-        connector = build_connector(source, config.user.home_location)
+        connector = build_connector(source, config.user.home_location, config.user.timezone)
         try:
             collected.append(connector.fetch())
         except Exception as exc:  # pragma: no cover

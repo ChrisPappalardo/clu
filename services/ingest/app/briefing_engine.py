@@ -269,6 +269,48 @@ def _select_diverse_clusters(clusters: list[StoryCluster], limit: int) -> list[S
     return selected
 
 
+def _select_section_metrics(metrics: list[SnapshotMetric], limit: int) -> list[SnapshotMetric]:
+    if len(metrics) <= limit:
+        return metrics
+    return metrics[:limit]
+
+
+def _select_diverse_market_metrics(metrics: list[SnapshotMetric], limit: int) -> list[SnapshotMetric]:
+    if len(metrics) <= limit:
+        return metrics
+
+    grouped: dict[str, list[SnapshotMetric]] = defaultdict(list)
+    source_order: list[str] = []
+    for metric in metrics:
+        if metric.source_id not in grouped:
+            source_order.append(metric.source_id)
+        grouped[metric.source_id].append(metric)
+
+    selected: list[SnapshotMetric] = []
+    source_index = 0
+    while len(selected) < limit and source_order:
+        source_id = source_order[source_index]
+        bucket = grouped[source_id]
+        if bucket:
+            selected.append(bucket.pop(0))
+            if len(selected) >= limit:
+                break
+        if not bucket:
+            source_order.pop(source_index)
+            if not source_order:
+                break
+            source_index %= len(source_order)
+            continue
+        source_index = (source_index + 1) % len(source_order)
+    return selected
+
+
+def _section_metric_limit(section_id: str, base_limit: int, available_count: int) -> int:
+    if section_id == "markets":
+        return max(base_limit, min(available_count, 14))
+    return base_limit
+
+
 def build_sections_and_clusters(
     config: AppConfig,
     collected: list[CollectedSourceData],
@@ -287,8 +329,9 @@ def build_sections_and_clusters(
         notes.extend(payload.notes)
         for item in payload.items:
             item.importance_score = _importance_score(item, generated_at)
-            section_items[payload.section].append(item)
-        section_metrics[payload.section].extend(payload.metrics)
+            section_items[item.section].append(item)
+        for metric in payload.metrics:
+            section_metrics[metric.section].append(metric)
 
     all_clusters: list[StoryCluster] = []
     sections: list[SnapshotSection] = []
@@ -376,7 +419,15 @@ def build_sections_and_clusters(
             reverse=True,
         )
         items.sort(key=lambda item: (item.importance_score, item.novelty_score, item.published_at or generated_at), reverse=True)
-        metrics = metrics[: config.briefing.max_headlines_per_section]
+        metric_limit = _section_metric_limit(
+            section_id,
+            config.briefing.max_headlines_per_section,
+            len(metrics),
+        )
+        if section_id == "markets":
+            metrics = _select_diverse_market_metrics(metrics, metric_limit)
+        else:
+            metrics = _select_section_metrics(metrics, metric_limit)
         top_items = items[: config.briefing.max_headlines_per_section]
         top_clusters = _select_diverse_clusters(section_clusters, config.briefing.max_headlines_per_section)
 

@@ -31,6 +31,7 @@ type SnapshotMetric = {
   trend?: string | null;
   freshness?: string | null;
   context?: string | null;
+  raw?: Record<string, unknown>;
 };
 
 type SnapshotSection = {
@@ -100,6 +101,44 @@ function compactSectionTitle(id: string) {
   if (id === "macro") return "Macro";
   if (id === "disruptions") return "Disruptions";
   return id.replace("-", " ");
+}
+
+function marketMetricMeta(metric: SnapshotMetric) {
+  const raw = metric.raw ?? {};
+  const region = typeof raw.market_region === "string" ? raw.market_region : "Other";
+  const group = typeof raw.market_group === "string" ? raw.market_group : "Other";
+  const order = typeof raw.display_order === "number" ? raw.display_order : 999;
+  return { region, group, order };
+}
+
+function groupMarketMetrics(metrics: SnapshotMetric[]) {
+  const regionOrder = ["US", "International", "Global", "Other"];
+  const groups = new Map<string, SnapshotMetric[]>();
+
+  for (const metric of metrics) {
+    const { region, group } = marketMetricMeta(metric);
+    const key = `${region}:::${group}`;
+    const existing = groups.get(key) ?? [];
+    existing.push(metric);
+    groups.set(key, existing);
+  }
+
+  return [...groups.entries()]
+    .map(([key, groupMetrics]) => {
+      const [region, group] = key.split(":::");
+      return {
+        region,
+        group,
+        metrics: groupMetrics.sort((left, right) => marketMetricMeta(left).order - marketMetricMeta(right).order),
+      };
+    })
+    .sort((left, right) => {
+      const regionDelta = regionOrder.indexOf(left.region) - regionOrder.indexOf(right.region);
+      if (regionDelta !== 0) return regionDelta;
+      const leftOrder = left.metrics[0] ? marketMetricMeta(left.metrics[0]).order : 999;
+      const rightOrder = right.metrics[0] ? marketMetricMeta(right.metrics[0]).order : 999;
+      return leftOrder - rightOrder;
+    });
 }
 
 export default function App() {
@@ -271,7 +310,36 @@ export default function App() {
               </div>
             )}
 
-            {section.metrics.length > 0 && (
+            {section.metrics.length > 0 && section.id === "markets" && (
+              <div className="marketMetricGroups">
+                {groupMarketMetrics(section.metrics).map((group) => (
+                  <section className="marketMetricGroup" key={`${group.region}-${group.group}`}>
+                    <div className="marketMetricHeader">
+                      <span className="marketMetricRegion">{group.region}</span>
+                      <h3>{group.group}</h3>
+                    </div>
+                    <div className="metricGrid">
+                      {group.metrics.map((metric) => (
+                        <div className="metricCard" key={metric.id}>
+                          <div className="metricHeader">
+                            <span>{metric.label}</span>
+                            {metric.freshness && <small>{metric.freshness}</small>}
+                          </div>
+                          <strong>{formatMetric(metric)}</strong>
+                          <div className="metricMeta">
+                            {metric.change && <span>{metric.change}</span>}
+                            {metric.change_percent && <span>{metric.change_percent}</span>}
+                            {metric.context && <span>{metric.context}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            )}
+
+            {section.metrics.length > 0 && section.id !== "markets" && (
               <div className="metricGrid">
                 {section.metrics.map((metric) => (
                   <div className="metricCard" key={metric.id}>

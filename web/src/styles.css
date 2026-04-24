@@ -322,6 +322,36 @@ a {
   gap: 10px;
 }
 
+.marketMetricGroups {
+  display: grid;
+  gap: 14px;
+}
+
+.marketMetricGroup {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(239, 230, 209, 0.62);
+}
+
+.marketMetricHeader {
+  display: grid;
+  gap: 4px;
+}
+
+.marketMetricHeader h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.marketMetricRegion {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #7a6542;
+}
+
 .metricCard {
   display: grid;
   gap: 6px;

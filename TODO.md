@@ -35,12 +35,25 @@
 - Fresh snapshot review suggests the next quality gaps are source filtering/normalization and AI writing quality in section-level narrative fields.
 - Source filtering was tightened so Guardian and RSS connectors now share consistent pattern handling, Guardian `trailText` is cleaned before rendering, and Guardian config can exclude content types such as `liveblog`.
 - Added a section-text cleanup/fallback layer so section `what_changed`, `why_now`, `risk_summary`, and `narrative` no longer surface markdown-ish formatting or raw cluster IDs in the dashboard/email output.
+- Fixed section routing so metrics/items are grouped by their own declared section instead of the parent connector section; this restored FRED market metrics to the `markets` section.
+- Improved FRED display formatting for the dashboard/report: CPI and core CPI now emphasize MoM and YoY moves, nonfarm payrolls now present as payroll change, retail sales render as dollar amounts, and index base-year units are hidden for CPI/core CPI/industrial production.
+- Added a Yahoo Finance markets connector using `yfinance` for broad market levels and daily moves; current live config includes S&P 500, Nasdaq Composite, Dow Jones Industrial Average, gold, bitcoin, Euro Stoxx 50, and Nikkei 225.
+- Section metric selection now rotates across sources only for the `markets` section so it can surface both FRED and Yahoo metrics without disturbing higher-signal metric ordering in `macro` and other sections.
+- Verified with a fresh Ollama-backed ingest on `2026-04-23` / snapshot `20260424T010746Z`; the `markets` section now shows a mixed set of FRED and Yahoo metrics, including S&P 500, Nasdaq, and Dow alongside Treasury yields and Brent.
+- Expanded the `markets` section metric budget to show the full current market pack and added explicit market grouping metadata for UI/report rendering.
+- Verified with snapshot `20260424T011852Z`; the `markets` section now carries 14 metrics grouped into `US Rates & Energy`, `Risk & Credit`, `US Equity Indexes`, `International Equity Indexes`, and `Alternatives`.
+- Corrected the `macro` section after the first metric-rotation pass displaced core FRED metrics with World Bank GDP rows; `macro` is back to the FRED-first set including CPI, core CPI, unemployment, payroll change, retail sales, and industrial production.
+- Adjusted `US Rates & Energy` ordering so the `US 2Y Treasury` appears before the `US 10Y Treasury`.
+- Reworked the weather connector so output is location-aware and human-readable: US-style locations now request imperial units from Open-Meteo, weather labels render as `High`, `Low`, `Precipitation`, and `Conditions`, and weather codes map to readable condition text such as `Overcast`.
+- Verified with snapshot `20260424T012853Z`; the `markets` section order now starts `US 2Y Treasury`, `US 10Y Treasury`, `Brent Crude Spot`, and the weather section now shows `60.4 °F`, `30.2 °F`, `0 inch`, and `Overcast` for the current Clio, CA forecast.
 
 ## Next Review Focus
 
 - Verify the Guardian/source-filter improvements against a clean full ingest artifact and continue tightening source selection where noisy items still leak through.
 - Coverage selection should become budgeted across sections/topics instead of relying mainly on rank order of the first enriched items.
 - AI section narratives still need stronger quality control; they no longer leak raw IDs/markdown, but they can still drift into weak or misleading prose.
+- The markets section now shows the larger grouped metric set; next UI/content pass should refine label wording, compactness, and which groups deserve the most prominence on smaller screens.
+- Weather is now legible for US locations, but the next pass should improve semantics further by surfacing more meaningful forecast concepts such as precipitation chance, snow/rain framing, and a concise daily weather summary instead of relying mainly on raw daily fields.
 
 ## Product Notes
 

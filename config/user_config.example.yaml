@@ -228,12 +228,58 @@ sources:
           label: High Yield Spread
           unit: "%"
           section: markets
-        - id: SP500
+
+  - id: yahoo-markets
+    type: yfinance_markets
+    enabled: true
+    section: markets
+    display_name: Yahoo Finance Markets
+    params:
+      period: 7d
+      interval: 1d
+      symbols:
+        - symbol: ^GSPC
           label: S&P 500
-          section: markets
-        - id: NASDAQCOM
+          unit: index
+          market_group: US Equity Indexes
+          market_region: US
+          display_order: 100
+        - symbol: ^IXIC
           label: Nasdaq Composite
-          section: markets
+          unit: index
+          market_group: US Equity Indexes
+          market_region: US
+          display_order: 101
+        - symbol: ^DJI
+          label: Dow Jones Industrial Average
+          unit: index
+          market_group: US Equity Indexes
+          market_region: US
+          display_order: 102
+        - symbol: GC=F
+          label: Gold
+          unit: USD
+          market_group: Alternatives
+          market_region: Global
+          display_order: 300
+        - symbol: BTC-USD
+          label: Bitcoin
+          unit: USD
+          market_group: Alternatives
+          market_region: Global
+          display_order: 301
+        - symbol: ^STOXX50E
+          label: Euro Stoxx 50
+          unit: index
+          market_group: International Equity Indexes
+          market_region: International
+          display_order: 200
+        - symbol: ^N225
+          label: Nikkei 225
+          unit: index
+          market_group: International Equity Indexes
+          market_region: International
+          display_order: 201
 
   - id: world-bank
     type: world_bank

@@ -11,6 +11,17 @@ from ..http_utils import get_json
 
 
 class FREDConnector(BaseConnector):
+    INDEX_UNIT_HIDDEN_SERIES = {"CPIAUCSL", "CPILFESL", "INDPRO"}
+    MARKET_METADATA = {
+        "DGS2": {"market_group": "US Rates & Energy", "market_region": "US", "display_order": 10},
+        "DGS10": {"market_group": "US Rates & Energy", "market_region": "US", "display_order": 11},
+        "DCOILBRENTEU": {"market_group": "US Rates & Energy", "market_region": "US", "display_order": 12},
+        "DTWEXBGS": {"market_group": "Risk & Credit", "market_region": "US", "display_order": 20},
+        "VIXCLS": {"market_group": "Risk & Credit", "market_region": "US", "display_order": 21},
+        "BAMLH0A0HYM2": {"market_group": "Risk & Credit", "market_region": "US", "display_order": 22},
+        "UST10Y2Y": {"market_group": "US Rates & Energy", "market_region": "US", "display_order": 13},
+    }
+
     def _to_float(self, value: str | None) -> float | None:
         if value in {None, ".", ""}:
             return None
@@ -80,11 +91,15 @@ class FREDConnector(BaseConnector):
                 "api_key": api_key,
                 "file_type": "json",
                 "sort_order": "desc",
-                "limit": 8,
+                "limit": 16,
             },
         ).get("observations", [])
-        valid = [row for row in observations if self._to_float(row.get("value")) is not None]
-        return valid[:2]
+        return [row for row in observations if self._to_float(row.get("value")) is not None]
+
+    def _display_unit(self, series_id: str, unit: str | None) -> str | None:
+        if series_id in self.INDEX_UNIT_HIDDEN_SERIES:
+            return None
+        return unit
 
     def _derived_metrics(self, metrics_by_series_id: dict[str, SnapshotMetric]) -> list[SnapshotMetric]:
         derived: list[SnapshotMetric] = []
@@ -128,6 +143,7 @@ class FREDConnector(BaseConnector):
                             "derived_from": ["DGS10", "DGS2"],
                             "latest_spread": spread,
                             "previous_spread": previous_spread,
+                            **self.MARKET_METADATA["UST10Y2Y"],
                         },
                     )
                 )
@@ -166,6 +182,7 @@ class FREDConnector(BaseConnector):
                 continue
 
             unit = spec.get("unit") or metadata.get("units_short") or metadata.get("units")
+            display_unit = self._display_unit(series_id, unit)
             latest_value = self._format_number(latest_numeric, unit=unit) or latest.get("value", ".")
             previous_value = self._format_number(previous_numeric, unit=unit) if previous else None
             change = None
@@ -184,12 +201,40 @@ class FREDConnector(BaseConnector):
                 trend = "up" if delta > 0 else ("down" if delta < 0 else "flat")
 
             label = spec.get("label") or metadata.get("title") or series_id
+            if series_id in {"CPIAUCSL", "CPILFESL"} and previous_numeric not in {None, 0.0}:
+                month_over_month = ((latest_numeric / previous_numeric) - 1.0) * 100
+                change = f"MoM {month_over_month:+.2f}%"
+                year_ago = self._to_float(observations[12].get("value")) if len(observations) > 12 else None
+                if year_ago not in {None, 0.0}:
+                    year_over_year = ((latest_numeric / year_ago) - 1.0) * 100
+                    change_percent = f"YoY {year_over_year:+.2f}%"
+                else:
+                    change_percent = None
+            elif series_id == "PAYEMS" and previous_numeric is not None:
+                jobs_delta = int(round((latest_numeric - previous_numeric) * 1000))
+                label = "Nonfarm Payroll Change"
+                latest_value = f"{jobs_delta:+,}"
+                previous_value = None
+                display_unit = "jobs"
+                change = None
+                change_percent = None
+                trend = "up" if jobs_delta > 0 else ("down" if jobs_delta < 0 else "flat")
+            elif series_id == "RSAFS":
+                latest_value = f"${latest_numeric:,.0f}"
+                previous_value = f"${previous_numeric:,.0f}" if previous_numeric is not None else None
+                display_unit = None
+                if previous_numeric is not None:
+                    delta = latest_numeric - previous_numeric
+                    change = f"${delta:+,.0f}"
+                    if previous_numeric and not isclose(previous_numeric, 0.0, abs_tol=1e-9):
+                        change_percent = f"{(delta / previous_numeric) * 100:+.2f}%"
+
             metric = SnapshotMetric(
                 id=f"{self.config.id}-{series_id}",
                 label=label,
                 value=latest_value,
                 previous_value=previous_value,
-                unit=unit,
+                unit=display_unit,
                 change=change,
                 change_percent=change_percent,
                 trend=trend,
@@ -202,6 +247,7 @@ class FREDConnector(BaseConnector):
                     "latest": latest,
                     "previous": previous,
                     "metadata": metadata,
+                    **self.MARKET_METADATA.get(series_id, {}),
                 },
             )
             metrics.append(metric)

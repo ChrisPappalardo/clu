@@ -31,6 +31,45 @@ def _metric_html(metric: SnapshotMetric) -> str:
     """
 
 
+def _grouped_metric_blocks(section_id: str, metrics: list[SnapshotMetric]) -> list[str]:
+    if section_id != "markets":
+        return [
+            f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:12px;'>{''.join(_metric_html(metric) for metric in metrics)}</div>"
+        ]
+
+    region_order = {"US": 0, "International": 1, "Global": 2, "Other": 3}
+    grouped: dict[tuple[str, str], list[SnapshotMetric]] = {}
+    for metric in metrics:
+        raw = metric.raw or {}
+        region = str(raw.get("market_region") or "Other")
+        group = str(raw.get("market_group") or "Other")
+        grouped.setdefault((region, group), []).append(metric)
+
+    ordered_groups = sorted(
+        grouped.items(),
+        key=lambda item: (
+            region_order.get(item[0][0], 99),
+            min(int(metric.raw.get("display_order", 999)) for metric in item[1]),
+        ),
+    )
+    blocks: list[str] = []
+    for (region, group), group_metrics in ordered_groups:
+        cards = "".join(
+            _metric_html(metric)
+            for metric in sorted(group_metrics, key=lambda metric: int((metric.raw or {}).get("display_order", 999)))
+        )
+        blocks.append(
+            f"""
+            <div style="margin-bottom:12px;padding:14px;border-radius:18px;background:rgba(239,230,209,0.62);">
+              <div style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#7a6542;">{escape(region)}</div>
+              <div style="margin-top:4px;font-size:16px;font-weight:700;">{escape(group)}</div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:10px;">{cards}</div>
+            </div>
+            """
+        )
+    return blocks
+
+
 def _cluster_html(cluster: StoryCluster) -> str:
     tags = "".join(
         f"<span style='display:inline-block;margin:6px 6px 0 0;padding:6px 10px;border-radius:999px;background:#ebe1cb;font-size:12px;'>{escape(tag)}</span>"
@@ -68,7 +107,7 @@ def render_snapshot_html(snapshot: DailySnapshot) -> str:
 
     sections_html: list[str] = []
     for section in snapshot.sections:
-        metric_html = "".join(_metric_html(metric) for metric in section.metrics)
+        metric_html = "".join(_grouped_metric_blocks(section.id, section.metrics))
         cluster_html = "".join(_cluster_html(cluster) for cluster in section.clusters)
         sections_html.append(
             f"""
